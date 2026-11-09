@@ -1,0 +1,9 @@
+[project]
+name = "dubizzle-cars-assistant"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["fastapi", "uvicorn", "litellm", "mcp", "pydantic", "pandas", "rank-bm25", "httpx", "streamlit", "python-dotenv", "pytest", "openpyxl"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
