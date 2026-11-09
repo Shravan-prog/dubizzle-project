@@ -1,5 +1,6 @@
 """HTTP-only client. Run: uv run streamlit run app.py."""
 import os
+import re
 from uuid import uuid4
 import httpx
 import streamlit as st
@@ -8,7 +9,6 @@ from dotenv import load_dotenv
 load_dotenv()
 st.set_page_config(page_title='Dubizzle Cars Assistant', page_icon='🚗', layout='wide')
 BASE=os.getenv('BACKEND_URL','http://127.0.0.1:8000').rstrip('/')
-APP_VERSION='direct-field-followups-v1'
 
 def api(method,path,**kwargs):
     try:
@@ -26,26 +26,47 @@ def api(method,path,**kwargs):
 
 st.title('Find your next car')
 st.caption('Explore dubizzle inventory, compare listings and arrange eligible viewings. Prices are in AED.')
-if st.session_state.get('app_version') != APP_VERSION:
-    st.session_state.app_version=APP_VERSION
-    st.session_state.session_id=str(uuid4())
-    st.session_state.messages=[]
-elif 'session_id' not in st.session_state:
-    st.session_state.session_id=str(uuid4())
-    st.session_state.messages=[]
+def valid_id(value):
+    return bool(re.fullmatch(r'[A-Za-z0-9_-]{1,100}', value))
+
+
+def set_session(user, session_id):
+    st.session_state.active_user = user
+    st.session_state.session_id = session_id
+    st.session_state.messages = []
+    st.query_params['user'] = user
+    st.query_params['session'] = session_id
+
+
 with st.sidebar:
     st.header('Your session')
-    user=st.text_input('User ID',value='demo-user')
+    url_user = st.query_params.get('user', '')
+    url_session = st.query_params.get('session', '')
+    user=st.text_input('User ID',value=url_user if valid_id(url_user) else 'demo-user')
     name=st.text_input('Name',value='')
-    if st.session_state.get('active_user')!=user:
-        st.session_state.active_user=user
-        st.session_state.session_id=str(uuid4())
-        st.session_state.messages=[]
+    if not valid_id(user):
+        st.error('Use 1–100 letters, numbers, underscores or hyphens for the user ID.')
+        st.stop()
+    if 'session_id' not in st.session_state or 'active_user' not in st.session_state:
+        resume = user == url_user and valid_id(url_session)
+        set_session(user, url_session if resume else str(uuid4()))
+        st.session_state.restore_history = resume
+    elif st.session_state.active_user != user:
+        set_session(user, str(uuid4()))
+        st.session_state.restore_history = False
+    elif (url_user, url_session) != (user, st.session_state.session_id):
+        st.query_params['user'] = user
+        st.query_params['session'] = st.session_state.session_id
+    if st.session_state.get('restore_history'):
+        history = api('GET', f'/sessions/{st.session_state.session_id}/history', params={'user_id': user})
+        if history is not None:
+            st.session_state.messages = history['messages']
+            st.session_state.restore_history = False
     if st.button('Start New Session (Test Long-Term Memory)'):
         result=api('POST','/sessions/reset',json={'user_id':user})
         if result:
-            st.session_state.session_id=result['session_id']
-            st.session_state.messages=[]
+            set_session(user, result['session_id'])
+            st.session_state.restore_history = False
             greeting=api('POST','/chat',json={'user_id':user,'session_id':result['session_id'],'message':'Hello'})
             if greeting: st.session_state.messages.append({'role':'assistant',**greeting})
     st.caption('Session: '+st.session_state.session_id)

@@ -38,6 +38,7 @@ This is a local demonstration, not a public deployment. Before production, add a
 - POST /chat: user_id, session_id, message → reply, referenced_cars, active_preferences, tool_calls.
 - GET /inventory: structured Search filters, query, offset, limit.
 - GET /users/{user_id}/memory: recalled profile.
+- GET /sessions/{session_id}/history?user_id=...: saved chat messages for a browser refresh.
 - POST /sessions/reset: user_id and optional session_id. Omit session_id for a fresh session preserving long-term memory.
 - GET /leads?user_id=...: user-filtered lead inspector with offset/limit.
 - GET /health: health and inventory count.
@@ -46,6 +47,7 @@ POST requests are not generally safe to retry automatically. Duplicate booking s
 SQLite and leads are created in DATA_DIR (default data). Source data is not modified by chats.
 Qualified inquiries are saved when name, valid contact and budget are available, even without a successful booking. In leads.csv, empty slot fields mean an inquiry, not a reservation; successful booking fills the slot fields. Notes preserve the user's stated needs. Slots begin on exact hours: a request for 10:30 prompts clarification rather than silently changing it to 10:00. Budget shorthand such as AED 80k is supported; negative preference statements prompt clarification before changing memory.
 Name is included in the first submitted chat message. Changing User ID starts a separate local chat.
+Refresh or reopen the same Streamlit URL to resume its chat. Start New Session creates a separate conversation while retaining the profile for the same User ID.
 
 ## Verification
 
@@ -56,6 +58,16 @@ uv run python scripts/demo_logs.py
 
 Verified: 31 tests passed and two deterministic HTTP conversations completed after the parsing, lead-recording and grounded-response changes. Live API checks confirmed that mileage, warranty, price and colour questions return direct field answers without another model call or a repeated listing card. Comparison requests enforce the requested result count, collapse duplicate vehicle options, explain verified tradeoffs and end with a grounded recommendation. A semantic comparison guard rejects unsupported adjectives and relative price, mileage or year claims that contradict the structured rows. A field question without prior car context asks the user to search or provide a listing ID, and provider outages display a friendly UI error rather than backend JSON. Gemini inventory and booking replies expose `compose_grounded_response` as a model-backed stage in the tool trace. Regression coverage also includes natural responses grounded in tool results, budget shorthand, negative preferences, contact validation, hourly slots and inquiries for unmanaged cars. Common inventory searches use a deterministic fallback if transient provider failures remain after retries.
 The deterministic demo replaces only the LLM boundary and uses synthetic inventory in a temporary directory; it does not alter supplied inventory or personal leads. Full transcripts: [logs/demo_transcripts.md](logs/demo_transcripts.md). The supplied listings contain no explicit dubizzle-managed flag, so live bookings are correctly rejected; successful booking persistence is demonstrated with a clearly labelled synthetic managed-car fixture.
+
+## Live Gemini RAG evaluation
+
+The [six-question dataset](data/gemini_rag_questions.json) checks expected inventory results and requires trace evidence that Gemini selected the search and composed the reply.
+
+```bash
+uv run python scripts/evaluate_rag.py --live --dataset data/gemini_rag_questions.json --output /tmp/gemini-rag-results.json
+```
+
+The [recorded live run](logs/gemini_rag_results.json) passed 4 of 6 cases. The BMW warranty comparison used the Python fallback after retrieving the correct listings. The satellite dish query exposed a keyword retrieval limitation: the assistant correctly reported no match, but the app still displayed two BMWs. The [broader evaluation](logs/rag_eval_report.md) covers memory, booking, guardrails, and other search behavior.
 
 ## Embedded demonstration excerpts
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-from src.schemas import ChatRequest, ChatResponse, ResetRequest, Search
+from src.schemas import ChatRequest, ChatResponse, Identifier, ResetRequest, Search
 
 # This local assessment uses .env as its explicit runtime configuration.
 load_dotenv(override=True)
@@ -52,6 +52,13 @@ def create_app(data_dir=None, completion=None, narrator=None):
     @api.get('/users/{user_id}/memory')
     def get_memory(user_id: str):
         return memory.profile(user_id)
+
+    @api.get('/sessions/{session_id}/history')
+    def get_history(session_id: Identifier, user_id: Identifier):
+        try:
+            return {'messages': memory.read_session(user_id, session_id)['messages']}
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
 
     @api.get('/leads')
     def get_leads(user_id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):

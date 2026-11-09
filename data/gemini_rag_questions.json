@@ -1,0 +1,43 @@
+[
+  {
+    "id": "L01", "category": "natural language filters", "session": "suv-shortlist",
+    "question": "I have AED 160k to spend on an SUV. Show the listings below that ceiling where the seller actually provides a price.",
+    "ids": ["CAR-005", "CAR-075", "CAR-081", "CAR-096"],
+    "require_model": ["search_inventory", "compose_grounded_response"]
+  },
+  {
+    "id": "L02", "category": "contextual narrowing", "session": "suv-shortlist",
+    "question": "From those results, keep only the ones with confirmed warranty coverage and fewer than 1,000 kilometres on the clock.",
+    "ids": ["CAR-005", "CAR-096"],
+    "require_model": ["search_inventory", "compose_grounded_response"]
+  },
+  {
+    "id": "L03", "category": "description retrieval",
+    "question": "Which Audi Q8 listings mention Bang & Olufsen audio in the seller's description? Show up to five.",
+    "ids": ["CAR-007", "CAR-039", "CAR-040", "CAR-041", "CAR-076"],
+    "require_keyword_query": true,
+    "require_model": ["search_inventory", "compose_grounded_response"]
+  },
+  {
+    "id": "L04", "category": "grounded recommendation",
+    "question": "Compare the BMW M4 listings by stated price, odometer reading, and warranty. Recommend the better fit if I care most about having a confirmed warranty and explain what I'd give up.",
+    "ids": ["CAR-023", "CAR-026"],
+    "reply": "recommend|choose|pick|better fit|go with",
+    "require_model": ["search_inventory", "compose_grounded_response"]
+  },
+  {
+    "id": "L05", "category": "no structured match",
+    "question": "Find any 2021 Honda under AED 5,000 with a confirmed listing price. Tell me if nothing qualifies.",
+    "ids": [],
+    "reply": "\\bno\\b[^\\n]{0,100}\\b(match|found|available|qualif|listings?|cars?|vehicles?)|could not (confirm|find)|none",
+    "require_model": ["search_inventory", "compose_grounded_response"]
+  },
+  {
+    "id": "L06", "category": "no description match",
+    "question": "Which BMW M4 listings explicitly mention a roof-mounted satellite dish? Only return cars whose descriptions mention that feature.",
+    "ids": [],
+    "reply": "\\bno\\b[^\\n]{0,100}\\b(match|found|available|mention|listings?|cars?|vehicles?)|could not (confirm|find)|none",
+    "require_keyword_query": true,
+    "require_model": ["search_inventory", "compose_grounded_response"]
+  }
+]

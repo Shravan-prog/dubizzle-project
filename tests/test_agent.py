@@ -38,6 +38,40 @@ def test_listing_reply_is_readable(inventory,tmp_path):
     assert '| Price | Mileage |' in result['reply']
     assert 'Listing ID:' in result['reply']
 
+
+def test_recall_uses_saved_turns_without_replaying_inventory(inventory, tmp_path):
+    from src.agent import Agent
+    from src.memory import Memory
+    from src.leads import Leads
+
+    memory = Memory(tmp_path / 'memory.db')
+    calls = []
+
+    def planner(**kwargs):
+        calls.append(kwargs['messages'][-1]['content'])
+        return tool_reply('search_inventory', {'make': 'Honda'})
+
+    agent = Agent(inventory, memory, Leads(tmp_path / 'leads.csv', inventory), planner)
+
+    def chat(message, session='original'):
+        return agent.chat(ChatRequest(user_id='u', session_id=session, message=message))
+
+    chat('Show Honda cars')
+    for message, expected in [
+        ('What did I ask earlier?', 'Show Honda cars'),
+        ('Which cars did you show me earlier?', 'Honda CR-V (H1)'),
+        ('What did I ask before?', 'Show Honda cars'),
+        ('What did you say earlier?', 'Found 2 matching listings'),
+        ('What was the mileage again?', '30,000 km'),
+    ]:
+        result = chat(message)
+        assert expected in result['reply']
+        assert '| Price |' not in result['reply']
+        if 'again' not in message:
+            assert not result['tool_calls']
+    assert 'yet' in chat('What did I ask earlier?', 'fresh')['reply']
+    assert calls == ['Show Honda cars']
+
 def test_empty_search_explains_next_step(inventory,tmp_path):
     from src.agent import Agent
     from src.memory import Memory

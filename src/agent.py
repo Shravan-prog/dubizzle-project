@@ -31,6 +31,15 @@ def blocked(text):
 def explicit_preference(text):
     return bool(re.search(r'\b(remember|prefer|preference|i like|i love|favou?rite|save this|save my)\b', text, re.I))
 
+def recall_intent(text):
+    if re.search(r'\bwhat (?:did|have) (?:i|we) (?:ask(?:ed)?|say|said|tell you|told you|talk(?:ed)? about|discuss(?:ed)?)\b', text, re.I):
+        return 'question'
+    if re.search(r'\b(?:what|which) (?:cars?|listings?|options?) did you (?:show|recommend|find)\b', text, re.I):
+        return 'listings'
+    if re.search(r'\b(?:what did you (?:say|answer|tell me) (?:earlier|before|last time)|(?:recap|summarize|summarise) (?:this|our|the) (?:chat|conversation))\b', text, re.I):
+        return 'answer'
+    return None
+
 AMOUNT = r'([\d,]+(?:\.\d+)?)\s*(k|m|thousand|million)?\b'
 
 def budget_amount(text):
@@ -333,6 +342,27 @@ class Agent:
         labels={'make':'make','model':'model','year_min':'year from','year_max':'year through','price_min':'minimum price','price_max':'maximum price','max_mileage_km':'maximum mileage','body_type':'body type','color':'color','warranty':'warranty','dubizzle_managed':'managed listing'}
         return '; '.join(f'{label}: {getattr(args,key)}' for key,label in labels.items() if getattr(args,key,None) is not None)
 
+    def recall(self, intent, state):
+        if intent != 'question' and state['last_shown_cars']:
+            listings = [self.inventory.get(car_id) for car_id in state['last_shown_cars']]
+            labels = [f'{car["year"]} {car["make"].title()} {car["model"].upper()} ({car["car_id"]})'
+                      for car in listings if car]
+            if labels and intent == 'listings':
+                return 'The most recent listings we discussed were ' + ', '.join(labels) + '.'
+        turns = state['messages']
+        for question, answer in reversed(list(zip(turns[::2], turns[1::2]))):
+            if recall_intent(question['content']):
+                continue
+            if intent == 'question':
+                return 'Earlier in this chat, you asked:\n\n> ' + question['content'].replace('\n', '\n> ')
+            if intent == 'answer':
+                # Search replies include full listing cards. Keep the summary above those cards.
+                summary = re.split(r'\n\n### ', answer['content'], maxsplit=1)[0]
+                return 'My last reply in this chat was:\n\n' + summary
+        if intent == 'listings':
+            return 'I haven’t shown any listings in this chat yet.'
+        return 'I don’t have an earlier message to recall in this chat yet.'
+
     def chat(self,request):
         with self.lock: return self._chat(request)
 
@@ -346,7 +376,6 @@ class Agent:
         ids=state['last_shown_cars']
         traces=[]; cars=[]; parts=[]
         returning=not state['messages'] and any(v is not None for v in profile.values())
-        greeting=self.natural_reply(r.message,'returning_greeting',profile,preference_sentence(profile,returning=True)) if returning else ''
         def finish(reply):
             if self.response_trace: traces.append(self.response_trace)
             self.memory.record(r.user_id,r.session_id,r.message,reply,ids)
@@ -354,6 +383,9 @@ class Agent:
         if re.search(r'\b(carswitch|yallamotor|cars24|autotrader|competitor)\b',r.message,re.I):
             return finish('I can only help with dubizzle cars, so I cannot compare or recommend competing platforms. I can help you search dubizzle inventory by make, budget, year or mileage.')
         if blocked(r.message): return finish('I can only help with dubizzle cars inventory, preferences and viewings.')
+        if intent := recall_intent(r.message):
+            return finish(self.recall(intent, state))
+        greeting=self.natural_reply(r.message,'returning_greeting',profile,preference_sentence(profile,returning=True)) if returning else ''
         if explicit_preference(r.message) and negative_preference(r.message):
             return finish('I have not changed your preferences. Please tell me which colors, makes or body types you want included, so I can save them accurately.')
         lead_text='\n'.join(item['content'] for item in state['messages'][-12:] if item['role']=='user')+'\n'+r.message
@@ -380,6 +412,7 @@ class Agent:
             return finish(reply)
         ordinal=re.search(r'\b(first|second|third|fourth)\b',r.message,re.I)
         followup=re.search(r"\b(it|its|it's|that car|that first|first car|first Honda)\b",r.message,re.I)
+        followup = followup or re.search(r'^(?:what|does|how much)\b.*\bagain[?.! ]*$', r.message, re.I)
         requested_field=re.search(r'mileage|warranty|details|price|colou?r',r.message,re.I)
         explicit_car=next((str(car_id) for car_id in self.inventory.frame.car_id if re.search(r'\b'+re.escape(str(car_id))+r'\b',r.message,re.I)),None)
         if explicit_car and requested_field:
@@ -461,7 +494,9 @@ class Agent:
                 elif name=='get_car_details':
                     result=self.resolve(args,ids)
                     if result:
-                        cars.append(result); parts.append(self.detail_fallback(r.message,result))
+                        cars.append(result)
+                        ids=[result['car_id']]+[car_id for car_id in ids if car_id!=result['car_id']]
+                        parts.append(self.detail_fallback(r.message,result))
                     else: parts.append('Which car would you like details about?')
                 elif name=='update_user_preferences':
                     values=args.model_dump(exclude_unset=True)

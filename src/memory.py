@@ -30,7 +30,13 @@ class Memory:
     def session(self,user,session):
         with self.connect() as db:
             db.execute('INSERT OR IGNORE INTO sessions VALUES (?,?,?,?)',(session,user,'[]','[]'))
+        return self.read_session(user,session)
+
+    def read_session(self,user,session):
+        with self.connect() as db:
             row=db.execute('SELECT user_id,messages,last_shown_cars FROM sessions WHERE session_id=?',(session,)).fetchone()
+        if row is None:
+            return {'messages': [], 'last_shown_cars': []}
         if row[0]!=user: raise PermissionError('Session belongs to another user')
         return {'messages':json.loads(row[1]),'last_shown_cars':json.loads(row[2])}
 
