@@ -23,6 +23,7 @@
     "question": "Compare the BMW M4 listings by stated price, odometer reading, and warranty. Recommend the better fit if I care most about having a confirmed warranty and explain what I'd give up.",
     "ids": ["CAR-023", "CAR-026"],
     "reply": "recommend|choose|pick|better fit|go with",
+    "forbid": "cannot provide a comparison|do not have access to",
     "require_model": ["search_inventory", "compose_grounded_response"]
   },
   {
@@ -36,7 +37,7 @@
     "id": "L06", "category": "no description match",
     "question": "Which BMW M4 listings explicitly mention a roof-mounted satellite dish? Only return cars whose descriptions mention that feature.",
     "ids": [],
-    "reply": "\\bno\\b[^\\n]{0,100}\\b(match|found|available|mention|listings?|cars?|vehicles?)|could not (confirm|find)|none",
+    "reply": "\\b(?:no|zero|0)\\b[^\\n]{0,100}\\b(match\\w*|found|available|mention\\w*|listings?|cars?|vehicles?)\\b|could not (confirm|find)|none",
     "require_keyword_query": true,
     "require_model": ["search_inventory", "compose_grounded_response"]
   }

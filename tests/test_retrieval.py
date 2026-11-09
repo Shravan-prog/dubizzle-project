@@ -22,6 +22,15 @@ def test_lexical_ranking_and_pagination(inventory):
     assert inventory.search(Search(limit=1, offset=1))['items'][0]['car_id'] == 'H2'
     assert inventory.get('missing') is None
 
+def test_required_description_phrase_filters_before_sorting(inventory):
+    from src.schemas import Search
+    result = inventory.search(Search(make='Honda', query='panoramic roof',
+                                     require_description_match=True, sort_by='price'))
+    assert [car['car_id'] for car in result['items']] == ['H1']
+    result = inventory.search(Search(make='Honda', query='satellite dish',
+                                     require_description_match=True))
+    assert result['total'] == 0
+
 def test_sorting_places_unknown_values_last(inventory):
     from src.schemas import Search
     result = inventory.search(Search(sort_by='mileage_km', sort_order='asc'))

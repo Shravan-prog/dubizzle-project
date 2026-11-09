@@ -39,6 +39,50 @@ def test_listing_reply_is_readable(inventory,tmp_path):
     assert 'Listing ID:' in result['reply']
 
 
+def test_comparison_narration_accepts_verified_price_gap(inventory, tmp_path):
+    from src.agent import Agent
+    from src.memory import Memory
+    from src.leads import Leads
+
+    def narrator(**kwargs):
+        payload = json.loads(kwargs['messages'][-1]['content'])
+        assert payload['verified_data']['differences']['price'] == {
+            'difference': '20000', 'higher_listing_id': 'H1', 'lower_listing_id': 'H2',
+        }
+        return NS(choices=[NS(message=NS(content='I recommend H1 for its listed warranty. It costs AED 20,000 more than H2.'))])
+
+    agent = Agent(inventory, Memory(tmp_path/'memory.db'), Leads(tmp_path/'leads.csv', inventory),
+                  lambda **kwargs: tool_reply('search_inventory', {'make': 'Honda'}), narrator)
+    result = agent.chat(ChatRequest(user_id='u', session_id='s', message='Compare the Hondas and recommend one with a warranty.'))
+    assert 'It costs AED 20,000 more than H2.' in result['reply']
+    assert result['tool_calls'][-1]['source'] == 'model'
+
+
+def test_returning_greeting_recalls_profile_without_answering_search(inventory, tmp_path):
+    from src.agent import Agent
+    from src.memory import Memory
+    from src.leads import Leads
+
+    memory = Memory(tmp_path/'memory.db')
+    memory.update('u', {'name': 'Demo', 'budget_max': 65000})
+    narrated = []
+
+    def narrator(**kwargs):
+        event = json.loads(kwargs['messages'][-1]['content'])['event']
+        narrated.append(event)
+        content = 'I cannot access inventory.' if event == 'returning_greeting' else 'Here are the Honda listings.'
+        return NS(choices=[NS(message=NS(content=content))])
+
+    agent = Agent(inventory, memory, Leads(tmp_path/'leads.csv', inventory),
+                  lambda **kwargs: tool_reply('search_inventory', {'make': 'Honda'}), narrator)
+    result = agent.chat(ChatRequest(user_id='u', session_id='fresh', message='Show me Hondas.'))
+    assert 'Welcome back, Demo' in result['reply']
+    assert '65,000' in result['reply']
+    assert 'Here are the Honda listings' in result['reply']
+    assert 'cannot access inventory' not in result['reply']
+    assert narrated == ['inventory_search']
+
+
 def test_recall_uses_saved_turns_without_replaying_inventory(inventory, tmp_path):
     from src.agent import Agent
     from src.memory import Memory

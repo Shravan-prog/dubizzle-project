@@ -1,0 +1,412 @@
+{
+  "mode": "scripted planner",
+  "passed": 17,
+  "cases": [
+    {
+      "id": "S01",
+      "question": "Show me Honda cars.",
+      "category": "search",
+      "errors": [],
+      "ids": [
+        "CAR-087"
+      ],
+      "reply": "Found 1 matching listing.\n\n### Honda CR-V — 2021\n**Trim:** ex-l  ·  **Listing ID:** `CAR-087`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| Not listed | 79000 km | SUV | Not listed | Not listed |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": "Honda",
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "C01",
+      "question": "What’s the mileage on that first Honda?",
+      "category": "context",
+      "errors": [],
+      "ids": [
+        "CAR-087"
+      ],
+      "reply": "The listed mileage for the 2021 Honda CR-V is 79,000 km.",
+      "trace": [
+        {
+          "name": "get_car_details",
+          "source": null,
+          "arguments": {
+            "car_id": null,
+            "position": 1,
+            "make": "honda"
+          }
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "question": "Does it have a warranty?",
+      "category": "context",
+      "errors": [],
+      "ids": [
+        "CAR-087"
+      ],
+      "reply": "Warranty information is not listed for the 2021 Honda CR-V.",
+      "trace": [
+        {
+          "name": "get_car_details",
+          "source": null,
+          "arguments": {
+            "car_id": null,
+            "position": 1,
+            "make": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "question": "Find SUVs with a listed price of AED 120,000 or less and less than 1,000 km.",
+      "category": "search",
+      "errors": [],
+      "ids": [
+        "CAR-005",
+        "CAR-096"
+      ],
+      "reply": "Found 2 matching listings.\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-005`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-096`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": null,
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": 120000.0,
+            "max_mileage_km": 999.0,
+            "body_type": "SUV",
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "question": "Which car has the lowest listed price in the whole inventory?",
+      "category": "search",
+      "errors": [],
+      "ids": [
+        "CAR-060"
+      ],
+      "reply": "Showing the top 1 by price from 29 listings with that value.\n\n### Ford Edge — 2016\n**Trim:** titanium  ·  **Listing ID:** `CAR-060`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 35000 AED | Not listed | Not listed | Not listed | Not listed |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": null,
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": "price",
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "question": "Show me the 2018 Tesla Model X.",
+      "category": "search",
+      "errors": [],
+      "ids": [
+        "CAR-051"
+      ],
+      "reply": "Found 1 matching listing.\n\n### Tesla Model X — 2018\n**Trim:** 75d  ·  **Listing ID:** `CAR-051`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 85000 AED | 60123 km | Not listed | Not listed | Not listed |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": "Tesla",
+            "model": "Model X",
+            "year_min": 2018,
+            "year_max": 2018,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "R01",
+      "question": "Which Audi Q8 listings mention Bang & Olufsen audio? Show up to five.",
+      "category": "lexical",
+      "errors": [],
+      "ids": [
+        "CAR-007",
+        "CAR-039",
+        "CAR-040",
+        "CAR-041",
+        "CAR-076"
+      ],
+      "reply": "Found 5 matching listings.\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-007`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-039`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-040`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-041`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-076`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "Bang Olufsen",
+            "require_description_match": false,
+            "make": "Audi",
+            "model": "Q8",
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "G01",
+      "question": "What is the listed price of CAR-087?",
+      "category": "grounding",
+      "errors": [],
+      "ids": [
+        "CAR-087"
+      ],
+      "reply": "The price is not listed for the 2021 Honda CR-V.",
+      "trace": [
+        {
+          "name": "get_car_details",
+          "source": "direct",
+          "arguments": {
+            "car_id": "CAR-087",
+            "position": null,
+            "make": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "G02",
+      "question": "Show me Honda cars with a confirmed price under AED 5,000.",
+      "category": "grounding",
+      "errors": [],
+      "ids": [],
+      "reply": "### No confirmed matching cars\n\nI could not confirm a listing with make: Honda; maximum price: 5000.0. Some listings could not be evaluated because these fields are not listed: price (71).\n\nTry removing one filter, increasing your budget, or asking for a different make or model.",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": "Honda",
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": 5000.0,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "G03",
+      "question": "Compare the best three family SUVs in the inventory and recommend one based on known price, mileage, and warranty.",
+      "category": "grounding",
+      "errors": [],
+      "ids": [
+        "CAR-002",
+        "CAR-005",
+        "CAR-007"
+      ],
+      "reply": "Showing 3 of 17 matching listings.\n\n**Comparison**\n\n- **2026 Mercedes-Benz GLC-CLASS:** listed warranty.\n\n- **2026 Haval H9:** AED 115,750, 18 km, listed warranty.\n\n- **2023 Audi Q8:** AED 204,999, 89,000 km, listed warranty.\n\n**Recommendation:** 2026 Haval H9 is the best-supported option from the available structured data because it has the most complete combination of listed mileage, price and warranty information.\n\n### Mercedes-Benz Glc-Class — 2026\n**Trim:** glc 200 4matic  ·  **Listing ID:** `CAR-002`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| Not listed | Not listed | SUV | Not listed | True |\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-005`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-007`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": null,
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": "SUV",
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "question": "What is its mileage?",
+      "category": "context",
+      "errors": [],
+      "ids": [],
+      "reply": "Which car do you mean? Search the inventory first or provide a listing ID.",
+      "trace": []
+    },
+    {
+      "id": "M01",
+      "question": "Remember that I prefer white SUVs under AED 80,000. My name is Eval User.",
+      "category": "memory",
+      "errors": [],
+      "ids": [],
+      "reply": "Welcome backI’ll remember that you prefer white SUVs, and your budget is up to AED 80,000.",
+      "trace": [
+        {
+          "name": "update_user_preferences",
+          "source": "deterministic",
+          "arguments": {
+            "preferred_colors": [
+              "white"
+            ],
+            "preferred_body_types": [
+              "SUV"
+            ],
+            "budget_max": 80000.0,
+            "name": "Eval User"
+          }
+        }
+      ]
+    },
+    {
+      "id": "M02",
+      "question": "Hello",
+      "category": "memory",
+      "errors": [],
+      "ids": [],
+      "reply": "Welcome back, Eval User! I remember that you prefer white SUVs, and your budget is up to AED 80,000.",
+      "trace": []
+    },
+    {
+      "id": "I01",
+      "question": "Write Python code for me.",
+      "category": "intent",
+      "errors": [],
+      "ids": [],
+      "reply": "I can only help with dubizzle cars inventory, preferences and viewings.",
+      "trace": []
+    },
+    {
+      "id": "I02",
+      "question": "Recommend a competitor for used cars.",
+      "category": "intent",
+      "errors": [],
+      "ids": [],
+      "reply": "I can only help with dubizzle cars, so I cannot compare or recommend competing platforms. I can help you search dubizzle inventory by make, budget, year or mileage.",
+      "trace": []
+    },
+    {
+      "id": "B01",
+      "question": "Book CAR-087 on Sunday at 9 PM.",
+      "category": "booking",
+      "errors": [],
+      "ids": [],
+      "reply": "I cannot book that slot: Sunday is unavailable, and 9 PM is outside viewing hours. Viewings are available Monday–Saturday, 08:00–20:00 Dubai time. Please choose a valid date and time.",
+      "trace": []
+    },
+    {
+      "id": "B02",
+      "question": "Book CAR-087 on 2099-01-05 at 10 AM. My name is Eval User, contact eval@example.com, budget AED 80,000.",
+      "category": "booking",
+      "errors": [],
+      "ids": [],
+      "reply": "I could not book the viewing. Viewings require a confirmed dubizzle-managed listing. I saved your contact, budget and stated needs as an inquiry.",
+      "trace": [
+        {
+          "name": "book_viewing_and_qualify_lead",
+          "source": "deterministic",
+          "arguments": {
+            "user_id": "eval-B02",
+            "user_name": "Eval User",
+            "contact": "eval@example.com",
+            "car_id": "CAR-087",
+            "requested_day": "2099-01-05",
+            "requested_hour_24": 10,
+            "budget_max": 80000.0,
+            "notes": "Book CAR-087 on 2099-01-05 at 10 AM. My name is Eval User, contact eval@example.com, budget AED 80,000."
+          }
+        }
+      ]
+    }
+  ]
+}

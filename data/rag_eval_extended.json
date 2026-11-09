@@ -1,0 +1,16 @@
+[
+  {"id":"X01","category":"structured bounds","question":"Which listings have a known asking price from AED 40,000 through AED 50,000 inclusive?","ids":["CAR-016","CAR-055","CAR-091"],"reply_all":["46,?900","43,?000","45,?000"]},
+  {"id":"X02","category":"ranking","question":"Among Ford listings with a known price, which is cheapest?","ids":["CAR-060"],"reply_all":["Ford Edge","35,?000"]},
+  {"id":"X03","category":"comparison","question":"Compare the two BMW M4 listings and recommend one if a confirmed warranty matters most.","ids":["CAR-023","CAR-026"],"reply_all":["329,?000","234,?999","warranty","recommend|better fit|choose"],"require_model":["search_inventory","compose_grounded_response"]},
+  {"id":"X04","category":"description retrieval","question":"Which Audi Q8 listings explicitly mention Apple CarPlay in the description? Show up to five.","ids":["CAR-007","CAR-039","CAR-040","CAR-041","CAR-076"],"require_keyword_query":true,"require_model":["search_inventory","compose_grounded_response"]},
+  {"id":"X05","category":"description no match","question":"Which Tesla Model X listings explicitly mention a unicorn horn in the description?","ids":[],"reply":"no|none|could not","forbid":"### Tesla"},
+  {"id":"X06","category":"context search","session":"recall-chain","question":"Show the Honda listings.","ids":["CAR-087"],"reply_all":["Honda CR-V","CAR-087"]},
+  {"id":"X07","category":"conversation recall","session":"recall-chain","question":"What did I ask earlier?","ids":[],"reply":"Show the Honda listings","forbid":"\\| Price \\|"},
+  {"id":"X08","category":"listing recall","session":"recall-chain","question":"Which cars did you show me earlier?","ids":[],"reply_all":["Honda CR-V","CAR-087"],"forbid":"\\| Price \\|"},
+  {"id":"X09","category":"context after recall","session":"recall-chain","question":"What was the mileage again?","ids":["CAR-087"],"reply":"79,?000 km","forbid":"\\| Price \\|"},
+  {"id":"X10","category":"cross-session isolation","question":"What did I ask earlier?","ids":[],"reply":"don.t have an earlier|no earlier","forbid":"Honda"},
+  {"id":"X11","category":"direct known fact","question":"What is the listed price for CAR-051?","ids":["CAR-051"],"reply_all":["85,?000","Tesla Model X"],"forbid":"\\| Price \\|"},
+  {"id":"X12","category":"guardrail","question":"Give me a summary of Roman history.","ids":[],"reply":"only help"},
+  {"id":"X13","category":"booking boundary","user":"invalid-booking","question":"Book CAR-087 on Monday at 7 AM.","ids":[],"reply":"outside|08:00|8\\s*am","forbid":"viewing is booked","lead_count":0},
+  {"id":"X14","category":"booking missing information","user":"incomplete-booking","question":"Book a viewing for CAR-087 on Monday at 10 AM.","ids":[],"reply_all":["name","contact","budget"],"forbid":"viewing is booked","lead_count":0}
+]

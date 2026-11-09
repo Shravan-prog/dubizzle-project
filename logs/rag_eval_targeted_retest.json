@@ -1,0 +1,180 @@
+{
+  "mode": "live provider",
+  "passed": 4,
+  "cases": [
+    {
+      "id": "L01",
+      "question": "I have AED 160k to spend on an SUV. Show the listings below that ceiling where the seller actually provides a price.",
+      "category": "natural language filters",
+      "errors": [],
+      "ids": [
+        "CAR-005",
+        "CAR-075",
+        "CAR-081",
+        "CAR-096"
+      ],
+      "reply": "Here are the SUVs available within your AED 160,000 budget:\n\n* **Haval H9 4WD** (2026) – AED 115,750\n  * Mileage: 18 km\n  * Highlights: Agency Warranty (6 years/200,000 km), leather upholstery, 360° camera, Apple CarPlay, and Android Auto as noted in the description.\n* **Land Rover Range Rover Evoque R-Dynamic SE** (2023) – AED 149,999\n  * Mileage: 69,000 km\n  * Highlights: GCC spec, panoramic sunroof, Meridian sound system, 360° camera, and Land Rover (Al Tayer) warranty until 28/09/2027 or 150,000 km as stated in the listing.\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-005`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |\n\n### Land Rover Range Rover Evoque — 2023\n**Trim:** r-dynamic se  ·  **Listing ID:** `CAR-075`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 149999 AED | 69000 km | SUV | Not listed | Not listed |\n\n### Land Rover Range Rover Evoque — 2023\n**Trim:** r-dynamic se  ·  **Listing ID:** `CAR-081`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 149999 AED | 69000 km | SUV | Not listed | Not listed |\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-096`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": null,
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": 1.0,
+            "price_max": 160000.0,
+            "max_mileage_km": null,
+            "body_type": "SUV",
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        },
+        {
+          "name": "compose_grounded_response",
+          "source": "model",
+          "arguments": {
+            "event": "inventory_search"
+          }
+        }
+      ]
+    },
+    {
+      "id": "L02",
+      "question": "From those results, keep only the ones with confirmed warranty coverage and fewer than 1,000 kilometres on the clock.",
+      "category": "contextual narrowing",
+      "errors": [],
+      "ids": [
+        "CAR-005",
+        "CAR-096"
+      ],
+      "reply": "Here are 2 Haval H9 models featuring confirmed agency warranty coverage and a mileage of 18 km.\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-005`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |\n\n### Haval H9 — 2026\n**Trim:** 4wd  ·  **Listing ID:** `CAR-096`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 115750 AED | 18 km | SUV | Not listed | True |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "",
+            "require_description_match": false,
+            "make": null,
+            "model": null,
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": 160000.0,
+            "max_mileage_km": 999.0,
+            "body_type": "SUV",
+            "color": null,
+            "warranty": true,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        },
+        {
+          "name": "compose_grounded_response",
+          "source": "model",
+          "arguments": {
+            "event": "inventory_search"
+          }
+        }
+      ]
+    },
+    {
+      "id": "L06",
+      "question": "Which BMW M4 listings explicitly mention a roof-mounted satellite dish? Only return cars whose descriptions mention that feature.",
+      "category": "no description match",
+      "errors": [],
+      "ids": [],
+      "reply": "No BMW M4 listings mention a roof-mounted satellite dish. \n\nTo broaden your search, try removing this specific feature requirement to view all available BMW M4 listings.",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "roof-mounted satellite dish",
+            "require_description_match": true,
+            "make": "BMW",
+            "model": "M4",
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        },
+        {
+          "name": "compose_grounded_response",
+          "source": "model",
+          "arguments": {
+            "event": "no_results"
+          }
+        }
+      ]
+    },
+    {
+      "id": "X04",
+      "question": "Which Audi Q8 listings explicitly mention Apple CarPlay in the description? Show up to five.",
+      "category": "description retrieval",
+      "errors": [],
+      "ids": [
+        "CAR-007",
+        "CAR-039",
+        "CAR-040",
+        "CAR-041",
+        "CAR-076"
+      ],
+      "reply": "Here are 5 Audi Q8 listings that explicitly mention Apple CarPlay in their descriptions:\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-007`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-039`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-040`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-041`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |\n\n### Audi Q8 — 2023\n**Trim:** 55 tfsi quattro s line  ·  **Listing ID:** `CAR-076`\n\n| Price | Mileage | Body type | Color | Warranty |\n|---|---|---|---|---|\n| 204999 AED | 89000 km | SUV | Not listed | True |",
+      "trace": [
+        {
+          "name": "search_inventory",
+          "source": "model",
+          "arguments": {
+            "query": "Apple CarPlay",
+            "require_description_match": true,
+            "make": "Audi",
+            "model": "Q8",
+            "year_min": null,
+            "year_max": null,
+            "price_min": null,
+            "price_max": null,
+            "max_mileage_km": null,
+            "body_type": null,
+            "color": null,
+            "warranty": null,
+            "dubizzle_managed": null,
+            "sort_by": null,
+            "sort_order": "asc",
+            "offset": 0,
+            "limit": 10
+          }
+        },
+        {
+          "name": "compose_grounded_response",
+          "source": "model",
+          "arguments": {
+            "event": "inventory_search"
+          }
+        }
+      ]
+    }
+  ]
+}

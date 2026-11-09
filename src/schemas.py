@@ -25,6 +25,7 @@ class ResetRequest(Contract):
 
 class Search(Contract):
     query: str = ''
+    require_description_match: bool = False
     make: str | None = None
     model: str | None = None
     year_min: int | None = Field(None, ge=1900, le=2100)

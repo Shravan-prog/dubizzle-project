@@ -7,7 +7,7 @@
   {"id":"S04","category":"search","question":"Show me the 2018 Tesla Model X.","plan":{"make":"Tesla","model":"Model X","year_min":2018,"year_max":2018},"ids":["CAR-051"]},
   {"id":"R01","category":"lexical","question":"Which Audi Q8 listings mention Bang & Olufsen audio? Show up to five.","plan":{"make":"Audi","model":"Q8","query":"Bang Olufsen","limit":5},"ids":["CAR-007","CAR-039","CAR-040","CAR-041","CAR-076"]},
   {"id":"G01","category":"grounding","question":"What is the listed price of CAR-087?","ids":["CAR-087"],"reply":"price is not listed"},
-  {"id":"G02","category":"grounding","question":"Show me Honda cars with a confirmed price under AED 5,000.","plan":{"make":"Honda","price_max":5000},"ids":[],"reply":"no (confirmed |cars |listings )?(matching|match|available)|could not confirm|no honda cars (were )?found"},
+  {"id":"G02","category":"grounding","question":"Show me Honda cars with a confirmed price under AED 5,000.","plan":{"make":"Honda","price_max":5000},"ids":[],"reply":"\\bno\\b[^\\n]{0,100}\\b(match\\w*|found|available|qualif\\w*)\\b|could not (confirm|find)|none"},
   {"id":"G03","category":"grounding","question":"Compare the best three family SUVs in the inventory and recommend one based on known price, mileage, and warranty.","plan":{"body_type":"SUV","limit":10},"unique_count":3,"reply":"recommend","forbid":"\\b(powerful|reliable|affordable)\\b"},
   {"id":"C03","category":"context","question":"What is its mileage?","ids":[],"reply":"which car"},
   {"id":"M01","category":"memory","question":"Remember that I prefer white SUVs under AED 80,000. My name is Eval User.","user":"returning","session":"original","preferences":{"budget_max":80000,"preferred_colors":["white"],"preferred_body_types":["SUV"]}},

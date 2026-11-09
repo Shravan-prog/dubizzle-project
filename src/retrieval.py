@@ -1,5 +1,6 @@
 import json
 import re
+from html import unescape
 import pandas as pd
 from rank_bm25 import BM25Okapi
 from src.schemas import Search
@@ -38,6 +39,10 @@ class Inventory:
             if value is not None:
                 values = pd.to_numeric(df[col], errors='coerce') if col in df else pd.Series(float('nan'), index=df.index)
                 df = df[values >= value] if lower else df[values <= value]
+        if filters.require_description_match:
+            phrase = self.normalized_description(filters.query)
+            descriptions = df['description'].fillna('').map(self.normalized_description)
+            df = df[(' ' + descriptions + ' ').str.contains(f' {phrase} ', regex=False)] if phrase else df.iloc[:0]
         if filters.sort_by and filters.sort_by != 'relevance':
             values = pd.to_numeric(df[filters.sort_by], errors='coerce')
             sortable_total=int(values.notna().sum())
@@ -48,6 +53,11 @@ class Inventory:
             scores = self.bm25.get_scores(re.findall(r'\w+',filters.query.lower()))
             df = df.assign(_score=[scores[i] for i in df.index]).sort_values('_score', ascending=False, kind='stable').drop(columns='_score')
         return {'total':len(df),'items':json.loads(df.iloc[filters.offset:filters.offset+filters.limit].to_json(orient='records')),'unknown_counts':unknown_counts,'sortable_total':sortable_total}
+
+    @staticmethod
+    def normalized_description(text):
+        plain = re.sub(r'<[^>]+>', ' ', unescape(str(text)))
+        return ' '.join(re.findall(r'\w+', plain.casefold()))
 
     def get(self, car_id):
         rows = self.frame[self.frame.car_id == car_id]
