@@ -50,3 +50,10 @@ def test_refresh_restores_transcript_and_car_context(inventory, tmp_path):
         assert not any(item.value == 'Show Honda cars' for item in refreshed.markdown)
 
     assert backend.get(f'/sessions/{session}/history', params={'user_id': 'another-user'}).status_code == 403
+
+
+def test_empty_state_directory_uses_committed_inventory(tmp_path):
+    from main import create_app
+    client = TestClient(create_app(tmp_path))
+    assert client.get('/health').json()['inventory_count'] == 100
+    assert (tmp_path/'leads.csv').exists()

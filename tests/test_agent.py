@@ -319,7 +319,7 @@ def test_booking_failure_reply_comes_from_the_booking_result(inventory,tmp_path)
     a=Agent(inventory,Memory(tmp_path/'m.db'),Leads(tmp_path/'leads.csv',inventory),completion=lambda **kw:pytest.fail('Planner should not run'),narrator=narrator)
     result=a.chat(ChatRequest(user_id='u',session_id='s',message='Book H2 on 2099-01-05 at 10 AM. My name is User, contact user@example.com, budget AED 80k.'))
     assert 'I could not book' in result['reply']
-    assert 'confirmed dubizzle-managed listing' in result['reply']
+    assert 'confirmed dubizzle-managed listing' in result['reply'].lower()
     assert '{"ok"' not in result['reply']
 
 def test_specific_car_followups_answer_directly_without_narrator(inventory,tmp_path):

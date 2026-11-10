@@ -11,3 +11,18 @@ def test_booking_rules(inventory, tmp_path):
     assert not service.book(Booking(**args))['ok']
     assert not service.book(Booking(**(args|{'car_id':'H2'})))['ok']
     assert len(service.rows()) == 1
+
+
+def test_parallel_bookings_cannot_reserve_the_same_slot(inventory, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from src.leads import Leads
+
+    first = Leads(tmp_path/'leads.csv', inventory)
+    second = Leads(tmp_path/'leads.csv', inventory)
+    request = Booking(user_id='u', user_name='User', contact='user@example.com',
+                      car_id='H1', requested_day='2099-01-05', requested_hour_24=10,
+                      budget_max=65000)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        responses = list(workers.map(lambda service: service.book(request), [first, second]))
+    assert sorted(result['ok'] for result in responses) == [False, True]
+    assert len(first.rows()) == 1

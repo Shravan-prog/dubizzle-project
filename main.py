@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from src.schemas import ChatRequest, ChatResponse, Identifier, ResetRequest, Search
 
+DEFAULT_DATA = Path(__file__).resolve().parent / 'data'
+
 # This local assessment uses .env as its explicit runtime configuration.
 load_dotenv(override=True)
 
@@ -16,9 +18,14 @@ def create_app(data_dir=None, completion=None, narrator=None):
     from src.memory import Memory
     from src.leads import Leads
     from src.agent import Agent
-    root = Path(data_dir or os.getenv('DATA_DIR', 'data'))
+    root = Path(data_dir or os.getenv('DATA_DIR') or DEFAULT_DATA)
     root.mkdir(parents=True, exist_ok=True)
-    inventory = Inventory(root / 'cars.csv')
+    inventory_path = root / 'cars.csv'
+    if not inventory_path.is_file():
+        inventory_path = DEFAULT_DATA / 'cars.csv'
+    if not inventory_path.is_file():
+        raise FileNotFoundError('Bundled data/cars.csv is missing. Restore it from Git or run uv run python scripts/prepare_data.py.')
+    inventory = Inventory(inventory_path)
     memory = Memory(root / 'memory.db')
     leads = Leads(root / 'leads.csv', inventory)
     agent = Agent(inventory, memory, leads, completion=completion, narrator=narrator)
@@ -77,5 +84,4 @@ def create_app(data_dir=None, completion=None, narrator=None):
     return api
 
 # A factory supports isolated tests and demonstration databases.
-if Path(os.getenv('DATA_DIR', 'data'), 'cars.csv').exists():
-    app = create_app()
+app = create_app()

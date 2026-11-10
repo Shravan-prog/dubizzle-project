@@ -105,3 +105,13 @@ def test_valid_booking_with_a_preference_still_books(make_chat):
     row, = leads.rows()
     assert row['requested_day'] == '2099-01-05'
     assert 'red car' in row['notes']
+
+
+def test_viewing_question_explains_ineligible_listing_before_collecting_details(make_chat):
+    chat, leads = make_chat()
+    chat('Show Honda cars.')
+    result = chat('Can I book a viewing for the second Honda?')
+    assert 'H2' in result['reply']
+    assert 'H2 is not Dubizzle-managed' in result['reply']
+    assert 'dubizzle-managed' in result['reply'].lower()
+    assert leads.rows() == []

@@ -150,3 +150,22 @@ def test_narrator_can_describe_a_verified_result_set_ceiling(inventory, tmp_path
     result = chat('Show me Honda cars under AED 70,000.')
     assert result['reply'].startswith('I found two Honda listings under AED 70,000.')
     assert result['tool_calls'][-1]['source'] == 'model'
+
+
+def test_satellite_dish_search_returns_no_listing_cards(actual_inventory, tmp_path):
+    chat = chat_with(actual_inventory, tmp_path, {'make': 'BMW', 'model': 'M4'})
+    result = chat('Which BMW M4 listings explicitly mention a roof-mounted satellite dish? Only return cars whose descriptions mention that feature.')
+    assert result['referenced_cars'] == []
+    assert '### BMW' not in result['reply']
+    assert 'no confirmed matching' in result['reply'].lower()
+
+
+def test_model_cannot_report_no_matches_above_valid_cards(inventory, tmp_path):
+    def narrator(**kwargs):
+        return NS(choices=[NS(message=NS(content='No matching Honda listings were found.'))])
+
+    chat = chat_with(inventory, tmp_path, {'make': 'Honda'}, narrator)
+    result = chat('Show Honda listings.')
+    assert len(result['referenced_cars']) == 2
+    assert 'No matching Honda' not in result['reply']
+    assert result['reply'].startswith('Found 2 matching listings.')

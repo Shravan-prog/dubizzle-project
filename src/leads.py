@@ -1,21 +1,28 @@
 import csv
-import fcntl
+from portalocker import Lock
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 from src.schemas import Booking, valid_contact
+
+def viewing_restriction(car):
+    if car and car.get('dubizzle_managed') is True:
+        return None
+    listing = car['car_id'] if car else 'This listing'
+    status = 'is not Dubizzle-managed' if car and car.get('dubizzle_managed') is False else 'has unconfirmed Dubizzle management'
+    return f'{listing} {status}. Online viewings require a confirmed Dubizzle-managed listing.'
 
 class Leads:
     def __init__(self,path,inventory):
         self.path,self.inventory = path,inventory
         path.parent.mkdir(parents=True,exist_ok=True)
-        with path.open('a+',newline='') as f:
-            fcntl.flock(f,fcntl.LOCK_EX)
+        with Lock(path,'a+',newline='',encoding='utf-8',timeout=10) as f:
             f.seek(0)
-            if not f.read(1): csv.DictWriter(f,fieldnames=list(Booking.model_fields)).writeheader()
+            if not f.read(1):
+                csv.DictWriter(f,fieldnames=list(Booking.model_fields)).writeheader()
+                f.flush()
 
     def rows(self):
-        with self.path.open(newline='') as f:
-            fcntl.flock(f,fcntl.LOCK_SH)
+        with Lock(self.path,'r',newline='',encoding='utf-8',timeout=10) as f:
             return list(csv.DictReader(f))
 
     def qualify(self,user_id,name,contact,budget,notes,budget_min=None):
@@ -25,8 +32,7 @@ class Leads:
         """
         if not valid_contact(contact) or budget <= 0: return
         row=dict(user_id=user_id,user_name=name,contact=contact,car_id='',requested_day='',requested_hour_24='',budget_max=budget,notes=notes,budget_min=budget_min)
-        with self.path.open('r+',newline='') as f:
-            fcntl.flock(f,fcntl.LOCK_EX)
+        with Lock(self.path,'r+',newline='',encoding='utf-8',timeout=10) as f:
             rows=list(csv.DictReader(f))
             previous = next((r for r in rows if r['user_id']==user_id and not r['requested_day']), None)
             if previous:
@@ -39,8 +45,8 @@ class Leads:
 
     def book(self, booking):
         car = self.inventory.get(booking.car_id)
-        if not car or car.get('dubizzle_managed') is not True:
-            return {'ok':False,'reason':'Viewings require a confirmed dubizzle-managed listing.','alternatives':[]}
+        if reason := viewing_restriction(car):
+            return {'ok':False,'reason':reason,'alternatives':[]}
         now = datetime.now(ZoneInfo('Asia/Dubai'))
         today = now.date()
         try:
@@ -50,8 +56,7 @@ class Leads:
             if booking.requested_day.lower() not in days:
                 return {'ok':False,'reason':'Use an ISO date or weekday.','alternatives':[]}
             day = today + timedelta(days=(days.index(booking.requested_day.lower())-today.weekday())%7)
-        with self.path.open('r+',newline='') as f:
-            fcntl.flock(f,fcntl.LOCK_EX)
+        with Lock(self.path,'r+',newline='',encoding='utf-8',timeout=10) as f:
             rows = list(csv.DictReader(f))
             taken = {(r['car_id'],r['requested_day'],int(r['requested_hour_24'])) for r in rows if r['requested_day'] and r['requested_hour_24'] != ''}
             def valid(d,h):

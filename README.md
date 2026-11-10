@@ -1,101 +1,100 @@
 # Dubizzle Cars AI Assistant
 
-Local take-home implementation: FastAPI backend, HTTP-only Streamlit client, hybrid retrieval, SQLite memory and CSV viewing leads.
+A FastAPI and Streamlit prototype for exploring the supplied Dubizzle inventory, arranging eligible viewings, and recalling shopper preferences across sessions.
 
-## Quick start
+## Run locally
 
-Requires Python 3.11–3.13 and uv; tested on macOS. CSV locking uses POSIX fcntl (macOS/Linux).
+Requires Python 3.11–3.13, [uv](https://docs.astral.sh/uv/), and a Gemini API key from Google AI Studio.
 
 ```bash
-# After extracting the submission ZIP:
-cd dubizzle-cars-assistant
+git clone https://github.com/Shravan-prog/dubizzle-project.git
+cd dubizzle-project
 uv sync --locked
 cp .env.example .env
-# Set GEMINI_API_KEY in .env; never commit it.
-uv run python scripts/prepare_data.py
+# Windows PowerShell: Copy-Item .env.example .env
+# Set GEMINI_API_KEY in .env.
 uv run uvicorn main:app --host 127.0.0.1 --port 8000
-# In a second terminal, from the same directory:
-uv run streamlit run app.py
 ```
 
-Open http://localhost:8501. API documentation: http://127.0.0.1:8000/docs.
-Default model: `gemini/gemini-3.5-flash-lite`; change LLM_MODEL for another tool-capable model.
-For OpenAI use an `openai/...` model and OPENAI_API_KEY. Provider availability and free-tier quotas vary; no live paid calls were made during verification.
-Configuration follows [LiteLLM Gemini documentation](https://docs.litellm.ai/docs/providers/gemini) and [native function calling](https://docs.litellm.ai/docs/completion/function_call).
+In a second terminal in the same folder, run `uv run streamlit run app.py`. Open [Streamlit](http://localhost:8501) or [API docs](http://127.0.0.1:8000/docs). The repository includes `data/cars.csv`, so a fresh clone needs no conversion step. To rebuild that CSV from the workbook, run `uv run python scripts/prepare_data.py --force`. The default model is `gemini/gemini-3.5-flash-lite`. Set `LLM_MODEL` in .env to override it.
 
-## Architecture
+## Why this stack
 
-Streamlit provides chat and inspectors without reading backend files: every operation uses HTTP through httpx. FastAPI owns inventory, profiles and lead writes. LiteLLM provides native tool calling without a separate orchestration framework. Structured pandas filters enforce explicit constraints and sorting, while BM25 ranks descriptions and trims. SQLite stores session histories and user profiles; CSV makes booked leads easy to inspect. Pydantic validates requests and tool arguments. The model first selects a tool; after the backend executes it, a second grounded model call receives only the verified result and phrases a natural response. Structured listing cards appear for search results, while mileage, warranty, price and colour follow-ups receive direct answers. A post-check rejects new numeric facts or unknown listing IDs, and any model failure falls back to a human-readable deterministic response rather than exposing internal JSON or repeating the full card. Temporary planning failures are retried; common inventory searches have a deterministic fallback after retries are exhausted.
+Streamlit keeps the chat and memory inspector easy to try while FastAPI owns retrieval and writes. LiteLLM lets Gemini call typed tools without a separate orchestration framework. Pandas handles exact filters and BM25 searches listing text, which suits a 100-row dataset with structured and free-text fields. SQLite persists conversations and profiles, and CSV makes qualified leads easy to inspect.
 
-## Design and future work
+## Design and scope
 
-The supplied workbook contains 100 rows with seven populated source columns. Conversion preserves these and adds stable IDs and nullable fields. Only facts stated in the listing text are extracted, including mileage, price, body type, color, transmission, fuel and warranty. Unknown prices fail price filters; unknown management status cannot authorize a viewing. Seller descriptions remain untrusted. Booking slots use Dubai time, Monday–Saturday inclusive, 08:00–20:00 inclusive; Sunday, past, out-of-hours and occupied slots are rejected. A process lock serializes chats; a file lock protects booking validation and CSV writes.
+The app uses the workbook’s 100-row raw tab. The cleaned tab is a different sample. The raw tab has no dedicated price field, and the importer currently indexes 29 explicitly identified asking prices. A blank price stays unknown, and a price filter excludes it. Only the 10 listings with explicit Dubizzle management evidence are eligible for online viewing. The app explains unconfirmed eligibility and uses Monday–Saturday, 08:00–20:00 Dubai time for eligible listings. To try an eligible listing, ask for Dubizzle-managed cars or use CAR-060. Booking confirmation comes from the slot check, and Portalocker serializes CSV access.
 
-The workbook's `raw dataset` and `cleaned dataset` tabs contain different samples. This project uses the 100 rows in `raw dataset` because it preserves the original listing descriptions and includes evidence for the ten Dubizzle-managed listings. It does not join the tabs by row number.
+This is a local prototype. Production work would include authenticated profiles, booking idempotency and integration with real schedules, stronger grounding for free-text claims, and more complete extraction of bilingual seller descriptions. The demo uses isolated local state and simulated bookings.
 
-This is a local demonstration, not a public deployment. Before production, add authentication/authorization (user IDs currently identify, not authenticate), separate private lead data from debugging output, distributed session locking, booking confirmation/idempotency, stronger semantic guardrails, broader adversarial/model evaluations and monitoring. The current single-pass tool planner uses generic clarification when no tool is selected; multi-step tool-result reasoning and better dialogue phrasing are future improvements. Keyword guards are not a complete security boundary. Do not expose the local API publicly.
+## Live conversation on the supplied inventory
 
-## API
+Captured with the configured Gemini provider and the committed 100-row CSV. Gemini selected the Honda and BMW search tools. The backend rendered the Honda result when narration fell back, answered the direct follow-ups, and recalled the saved profile from SQLite in a different session.
 
-- POST /chat: user_id, session_id, message → reply, referenced_cars, active_preferences, tool_calls.
-- GET /inventory: structured Search filters, query, offset, limit.
-- GET /users/{user_id}/memory: recalled profile.
-- GET /sessions/{session_id}/history?user_id=...: saved chat messages for a browser refresh.
-- POST /sessions/reset: user_id and optional session_id. Omit session_id for a fresh session preserving long-term memory.
-- GET /leads?user_id=...: user-filtered lead inspector with offset/limit.
-- GET /health: health and inventory count.
+### Explore the inventory
 
-POST requests are not generally safe to retry automatically. Duplicate booking slots are rejected, not replayed.
-SQLite and leads are created in DATA_DIR (default data). Source data is not modified by chats.
-Qualified inquiries can collect a name, valid contact, AED budget range and needs across multiple turns. Empty slot fields in leads.csv identify an inquiry. A booking fills the slot fields, and its reply comes directly from the booking result. Ambiguous, invalid or non-hour slots prompt clarification before any reservation. The assistant asks for AED when the user supplies another currency.
-The sidebar name is sent with the new-session greeting or the next chat message. Changing User ID starts a separate local chat.
-Refresh or reopen the same Streamlit URL to resume its chat. Start New Session creates a separate conversation while retaining the profile for the same User ID.
-The profile also retains the most recent inventory inquiry as a summary of the applied search filters. Ask “What cars was I looking for last time?” in a new session to retrieve it.
+**User** · My name is Reviewer. Show me Honda cars.
+
+> **Assistant**
+>
+> Found 1 matching listing.
+>
+> **Honda CR-V — 2021**
+> **Trim:** ex-l  ·  **Listing ID:** `CAR-087`
+>
+> | Price | Mileage | Body type | Color | Warranty |
+> |---|---|---|---|---|
+> | Not listed | 79000 km | SUV | Not listed | Not listed |
+
+**User** · What is the mileage of the first Honda?
+
+> **Assistant**
+>
+> The listed mileage for the 2021 Honda CR-V is 79,000 km.
+
+**User** · Does it have a warranty?
+
+> **Assistant**
+>
+> Warranty information is not listed for the 2021 Honda CR-V.
+
+**User** · Can I book a viewing for the first car?
+
+> **Assistant**
+>
+> CAR-087 has unconfirmed Dubizzle management. Online viewings require a confirmed Dubizzle-managed listing.
+
+**User** · Remember that I prefer SUVs under AED 80,000 and I like CAR-087.
+
+> **Assistant**
+>
+> I have saved your preference for SUVs under AED 80,000 and noted that you like CAR-087.
+
+### Recall in a new session
+
+**User** · Hello
+
+> **Assistant**
+>
+> Welcome back, Reviewer! I remember that you prefer SUVs, and your budget is up to AED 80,000, and you liked CAR-087.
+
+**User** · Which BMW M4 listings explicitly mention a roof-mounted satellite dish? Only return cars whose descriptions mention that feature.
+
+> **Assistant**
+>
+> No BMW M4 listings matched your search for a roof-mounted satellite dish.
+>
+> Try removing one filter, increasing your budget, or asking for a different make or model.
+
+![Streamlit showing recalled preferences and zero BMW cards for the satellite-dish query](logs/streamlit-live-recall.png)
 
 ## Verification
 
 ```bash
 uv run pytest -q
+uv run python scripts/evaluate_rag.py
 uv run python scripts/demo_logs.py
 ```
 
-The audit regression suite passed 88 automated tests, 17 scripted evaluation cases, and two deterministic HTTP demos. The tool trace records whether Gemini wrote a reply or the backend used its fallback.
-The deterministic demo replaces only the LLM boundary and uses synthetic inventory in a temporary directory. Full transcripts are in [logs/demo_transcripts.md](logs/demo_transcripts.md). The raw workbook has no dedicated management column. Ten listings identify themselves as offered by Dubizzle Cars and explicitly say its team manages the buyer–seller interaction. The importer marks those ten eligible for prototype bookings and leaves unverified listings unknown.
-
-## Live Gemini RAG evaluation
-
-The [six-question dataset](data/gemini_rag_questions.json) checks expected inventory results and requires trace evidence that Gemini selected the search and composed the reply.
-
-```bash
-uv run python scripts/evaluate_rag.py --live --dataset data/gemini_rag_questions.json --output /tmp/gemini-rag-results.json
-```
-
-The [recorded live run](logs/gemini_rag_results.json) passed 4 of 6 cases. The BMW warranty comparison used the Python fallback after retrieving the correct listings. The satellite dish query exposed a keyword retrieval limitation: the assistant correctly reported no match, but the app still displayed two BMWs. The [broader evaluation](logs/rag_eval_report.md) covers memory, booking, guardrails, and other search behavior.
-
-## Embedded demonstration excerpts
-
-```text
-Conversation 1 — synthetic fixture, real HTTP tools and persistence
-User: Show Honda cars
-Assistant: Found 1 matching listings (prices in AED).
-[DEMO-H1] Honda CR-V Sport, 2022; price: 60000; mileage_km: 30000;
-body_type: SUV; color: white; warranty: True; dubizzle_managed: True
-User: What is the mileage on that first Honda?
-Assistant: [DEMO-H1] ... mileage_km: 30000 ...
-User: Does it have warranty?
-Assistant: [DEMO-H1] ... warranty: True ...
-User: Remember I like DEMO-H1 and white SUVs under AED 65000.
-Assistant: Saved your preferences ...
-User: Book DEMO-H1 on 2099-01-05 at 10:00.
-      Name Demo User, contact demo@example.com, budget AED 65000.
-Assistant: Viewing booked: {"ok": true, ...}
-
-Conversation 2 — same user, fresh session
-User: Hello
-Assistant: Welcome back! Your saved preferences:
-name: Demo User; budget_max: 65000; preferred_body_types: ["SUV"];
-preferred_colors: ["white"]; liked_car_ids: ["DEMO-H1"].
-```
-
-Excerpts are shortened for readability; complete generated output is in the linked transcript.
-
+The scripted evaluation passes all 17 cases, including S03 for the lowest indexed asking price. The two [deterministic integration demos](logs/demo_transcripts.md) use a synthetic fixture for repeatability. See the [evaluation report](logs/rag_eval_report.md) for separately recorded live and scripted scores.
