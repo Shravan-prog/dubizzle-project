@@ -6,7 +6,7 @@ Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 Identifier = Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9_-]{1,100}$')]
 
 class Contract(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
 
 class ChatRequest(Contract):
     user_id: Identifier

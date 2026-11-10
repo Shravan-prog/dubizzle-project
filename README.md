@@ -47,8 +47,8 @@ This is a local demonstration, not a public deployment. Before production, add a
 
 POST requests are not generally safe to retry automatically. Duplicate booking slots are rejected, not replayed.
 SQLite and leads are created in DATA_DIR (default data). Source data is not modified by chats.
-Qualified inquiries are saved when name, valid contact and budget are available, even without a successful booking. In leads.csv, empty slot fields mean an inquiry, not a reservation; successful booking fills the slot fields. Notes preserve the user's stated needs. Slots begin on exact hours: a request for 10:30 prompts clarification rather than silently changing it to 10:00. Budget shorthand such as AED 80k is supported; negative preference statements prompt clarification before changing memory.
-Name is included in the first submitted chat message. Changing User ID starts a separate local chat.
+Qualified inquiries can collect a name, valid contact, AED budget range and needs across multiple turns. Empty slot fields in leads.csv identify an inquiry. A booking fills the slot fields, and its reply comes directly from the booking result. Ambiguous, invalid or non-hour slots prompt clarification before any reservation. The assistant asks for AED when the user supplies another currency.
+The sidebar name is sent with the new-session greeting or the next chat message. Changing User ID starts a separate local chat.
 Refresh or reopen the same Streamlit URL to resume its chat. Start New Session creates a separate conversation while retaining the profile for the same User ID.
 The profile also retains the most recent inventory inquiry as a summary of the applied search filters. Ask “What cars was I looking for last time?” in a new session to retrieve it.
 
@@ -59,7 +59,7 @@ uv run pytest -q
 uv run python scripts/demo_logs.py
 ```
 
-The latest audit fixes passed 44 automated tests, 17 scripted evaluation cases, and two deterministic HTTP demos. Targeted live checks covered strict price bounds, required features, service history, and viewing hours. The BMW comparison used the grounded fallback after Gemini supplied an incorrect rounded price difference. The tool trace records whether Gemini wrote the reply or a fallback was used.
+The audit regression suite passed 88 automated tests, 17 scripted evaluation cases, and two deterministic HTTP demos. The tool trace records whether Gemini wrote a reply or the backend used its fallback.
 The deterministic demo replaces only the LLM boundary and uses synthetic inventory in a temporary directory. Full transcripts are in [logs/demo_transcripts.md](logs/demo_transcripts.md). The raw workbook has no dedicated management column. Ten listings identify themselves as offered by Dubizzle Cars and explicitly say its team manages the buyer–seller interaction. The importer marks those ten eligible for prototype bookings and leaves unverified listings unknown.
 
 ## Live Gemini RAG evaluation

@@ -28,6 +28,9 @@ class Leads:
         with self.path.open('r+',newline='') as f:
             fcntl.flock(f,fcntl.LOCK_EX)
             rows=list(csv.DictReader(f))
+            previous = next((r for r in rows if r['user_id']==user_id and not r['requested_day']), None)
+            if previous:
+                row['notes'] = '\n'.join(dict.fromkeys((previous['notes'] + '\n' + notes).splitlines()))[-2000:]
             rows=[r for r in rows if not (r['user_id']==user_id and not r['requested_day'])]
             rows.append(row)
             f.seek(0)

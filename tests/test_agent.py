@@ -185,7 +185,8 @@ def test_recall_uses_saved_turns_without_replaying_inventory(inventory, tmp_path
         ('Which cars did you show me earlier?', 'Honda CR-V (H1)'),
         ('What did I ask before?', 'Show Honda cars'),
         ('What did you say earlier?', 'Found 2 matching listings'),
-        ('What was the mileage again?', '30,000 km'),
+        ('What was the mileage again?', 'Which of the displayed cars'),
+        ('What was the mileage of the first car again?', '30,000 km'),
     ]:
         result = chat(message)
         assert expected in result['reply']
@@ -309,17 +310,16 @@ def test_grounded_narrator_turns_tool_results_into_natural_replies(inventory,tmp
     assert '### Honda CR-V' in result['reply']
     assert 'H1' in narration_inputs[0] and 'H2' in narration_inputs[0]
 
-def test_grounded_narrator_makes_booking_failure_readable(inventory,tmp_path):
+def test_booking_failure_reply_comes_from_the_booking_result(inventory,tmp_path):
     from src.agent import Agent
     from src.memory import Memory
     from src.leads import Leads
     def narrator(**kwargs):
-        prompt=kwargs['messages'][-1]['content']
-        assert 'confirmed dubizzle-managed listing' in prompt
-        return NS(choices=[NS(message=NS(content="I couldn't book that viewing because the listing is not confirmed as dubizzle-managed. I saved your inquiry and budget."))])
+        pytest.fail('Booking outcome must come directly from the booking tool')
     a=Agent(inventory,Memory(tmp_path/'m.db'),Leads(tmp_path/'leads.csv',inventory),completion=lambda **kw:pytest.fail('Planner should not run'),narrator=narrator)
     result=a.chat(ChatRequest(user_id='u',session_id='s',message='Book H2 on 2099-01-05 at 10 AM. My name is User, contact user@example.com, budget AED 80k.'))
-    assert result['reply'].startswith("I couldn't book")
+    assert 'I could not book' in result['reply']
+    assert 'confirmed dubizzle-managed listing' in result['reply']
     assert '{"ok"' not in result['reply']
 
 def test_specific_car_followups_answer_directly_without_narrator(inventory,tmp_path):

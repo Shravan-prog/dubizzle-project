@@ -1,4 +1,5 @@
 import json
+import math
 import sqlite3
 from src.schemas import Preferences
 
@@ -18,13 +19,24 @@ class Memory:
     def profile(self,user):
         with self.connect() as db:
             row=db.execute('SELECT profile FROM user_profiles WHERE user_id=?',(user,)).fetchone()
-        return json.loads(row[0]) if row else Preferences().model_dump()
+        return self.decode_profile(row)
+
+    @staticmethod
+    def decode_profile(row):
+        profile = json.loads(row[0]) if row else Preferences().model_dump()
+        for key in ('budget_min', 'budget_max'):
+            if profile.get(key) is not None and not math.isfinite(profile[key]):
+                profile[key] = None
+        return profile
 
     def update(self,user,values):
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row=db.execute('SELECT profile FROM user_profiles WHERE user_id=?',(user,)).fetchone()
-            profile=json.loads(row[0]) if row else Preferences().model_dump()
+            profile = self.decode_profile(row)
+            if values.get('liked_car_ids'):
+                likes = list(dict.fromkeys([*(profile.get('liked_car_ids') or []), *values['liked_car_ids']]))
+                values = {**values, 'liked_car_ids': likes}
             profile.update(values)
             profile=Preferences(**profile).model_dump()
             if profile['budget_min'] is not None and profile['budget_max'] is not None and profile['budget_min']>profile['budget_max']: raise ValueError('Invalid budget range')

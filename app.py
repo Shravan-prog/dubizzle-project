@@ -34,6 +34,7 @@ def set_session(user, session_id):
     st.session_state.active_user = user
     st.session_state.session_id = session_id
     st.session_state.messages = []
+    st.session_state.sent_name = ''
     st.query_params['user'] = user
     st.query_params['session'] = session_id
 
@@ -67,8 +68,11 @@ with st.sidebar:
         if result:
             set_session(user, result['session_id'])
             st.session_state.restore_history = False
-            greeting=api('POST','/chat',json={'user_id':user,'session_id':result['session_id'],'message':'Hello'})
-            if greeting: st.session_state.messages.append({'role':'assistant',**greeting})
+            greeting_text = f'My name is {name.strip()}. Hello' if name.strip() else 'Hello'
+            greeting=api('POST','/chat',json={'user_id':user,'session_id':result['session_id'],'message':greeting_text})
+            if greeting:
+                st.session_state.sent_name = name.strip()
+                st.session_state.messages.append({'role':'assistant',**greeting})
     st.caption('Session: '+st.session_state.session_id)
 
 for message in st.session_state.messages:
@@ -78,12 +82,13 @@ for message in st.session_state.messages:
             with st.expander('Tool trace'): st.json(message['tool_calls'])
 
 if prompt:=st.chat_input('Ask about a make, budget, mileage or viewing'):
-    sent=(f'My name is {name}. ' if name and not st.session_state.messages else '')+prompt
+    sent=(f'My name is {name.strip()}. ' if name.strip() and name.strip() != st.session_state.get('sent_name') else '')+prompt
     st.session_state.messages.append({'role':'user','content':prompt})
     with st.chat_message('user'): st.markdown(prompt)
     with st.spinner('Checking inventory…'):
         result=api('POST','/chat',json={'user_id':user,'session_id':st.session_state.session_id,'message':sent})
     if result:
+        st.session_state.sent_name = name.strip()
         st.session_state.messages.append({'role':'assistant',**result})
         st.rerun()
 
