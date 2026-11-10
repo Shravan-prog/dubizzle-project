@@ -35,4 +35,4 @@ Synthetic inventory and scripted LLM responses. Real FastAPI HTTP contracts, ret
 
 **User:** Hello
 
-**Assistant:** Welcome back, Demo User. I remember you prefer white SUVs under AED 65000 and liked DEMO-H1.
+**Assistant:** Welcome back, Demo User! I remember that you prefer white SUVs, and your budget is up to AED 65,000, and you liked DEMO-H1.

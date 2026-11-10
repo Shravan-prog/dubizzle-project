@@ -18,3 +18,31 @@ def test_does_not_infer_missing_facts_from_model_name():
     assert fields['body_type'] is None
     assert fields['price'] is None
     assert fields['warranty'] is None
+
+
+def test_management_requires_listing_specific_evidence():
+    description = ('Buy this car with confidence from dubizzle cars!<br>'
+                   'We manage the interaction between the buyer and seller, from beginning to end.')
+    assert extract_fields('Ford Edge', description)['dubizzle_managed'] is True
+    assert extract_fields('Dealer listing', 'Seller of the month by Dubizzle')['dubizzle_managed'] is None
+    assert extract_fields('Private sale', 'This car is not managed by Dubizzle')['dubizzle_managed'] is False
+
+
+def test_extracts_listing_facts_without_confusing_historical_or_interior_values():
+    facts = extract_fields('5 Years Warranty', 'GCC Specs<br>101982 kms<br>2.0L 4-Cylinder Petrol. '
+                           'Interior color: Black. Exterior: White. Asking price AED 35,000. Originally AED 60,000.')
+    assert (facts['mileage_km'], facts['price'], facts['warranty'], facts['color'], facts['fuel_type']) == (
+        101982, 35000, True, 'white', 'petrol')
+    assert extract_fields('0KM', 'Warranty until 100,000 km')['mileage_km'] == 0
+    assert extract_fields('', 'Warranty until 100,000 km')['mileage_km'] is None
+    assert extract_fields('', 'Buy now for AED 35,000. AED 60,000 original price.')['price'] == 35000
+    assert extract_fields('', 'Interior color: Black.')['color'] is None
+
+
+def test_audit_wording_variants():
+    assert extract_fields('', 'Transmission: 8-speed Automatic')['transmission'] == 'automatic'
+    assert extract_fields('', 'All-electric SUV')['fuel_type'] == 'electric'
+    assert extract_fields('', 'Engine Specs: Electric Motor — 286 HP')['fuel_type'] == 'electric'
+    assert extract_fields('GLA 35 AMG | AGENCY WARRANTY/SERVICE!', '')['warranty'] is True
+    assert extract_fields('', 'This car is no longer managed by Dubizzle.')['dubizzle_managed'] is False
+    assert extract_fields('', 'Asking price AED 9,000.')['price'] == 9000

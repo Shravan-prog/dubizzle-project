@@ -34,6 +34,12 @@ def test_required_description_phrase_filters_before_sorting(inventory):
 def test_sorting_places_unknown_values_last(inventory):
     from src.schemas import Search
     result = inventory.search(Search(sort_by='mileage_km', sort_order='asc'))
-    assert [car['car_id'] for car in result['items']] == ['H1', 'H2', 'T1']
+    assert [car['car_id'] for car in result['items']] == ['H1', 'H2']
     newest = inventory.search(Search(sort_by='year', sort_order='desc', limit=1))
     assert newest['items'][0]['car_id'] == 'T1'
+
+def test_price_coverage_is_scoped_and_unpriced_listings_do_not_rank(inventory):
+    from src.schemas import Search
+    assert inventory.search(Search(make='Honda', price_max=5000))['unknown_counts'] == {'price': 0}
+    ranked = inventory.search(Search(make='Toyota', sort_by='price', limit=1))
+    assert ranked['items'] == [] and ranked['sortable_total'] == 0

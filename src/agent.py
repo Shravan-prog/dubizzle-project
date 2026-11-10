@@ -5,6 +5,7 @@ import threading
 import time
 from types import SimpleNamespace
 from datetime import datetime
+from html import unescape
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 from src.schemas import Search, CarDetails, Preferences, Booking, valid_contact
@@ -28,12 +29,19 @@ TOOLS = {
  'book_viewing_and_qualify_lead':(Booking,'Book a requested viewing after collecting all required fields.')}
 
 def blocked(text):
-    return bool(re.search(r'\b(carswitch|yallamotor|cars24|autotrader|competitor|history|essay|poem|trivia|write.{0,20}code|python code|solve.{0,15}equation|ignore.{0,20}instructions)\b',text,re.I))
+    if re.search(r'\b(carswitch|yallamotor|cars24|autotrader|competitor|essay|poem|trivia|write.{0,20}code|python code|solve.{0,15}equation|ignore.{0,20}instructions)\b',text,re.I):
+        return True
+    return bool(re.search(r'\bhistory\b', text, re.I) and not re.search(
+        r'\b(?:service|maintenance|accident|ownership|vehicle|car)\s+history\b', text, re.I))
 
 def explicit_preference(text):
     return bool(re.search(r'\b(remember|prefer|preference|i like|i love|favou?rite|save this|save my)\b', text, re.I))
 
 def recall_intent(text):
+    if re.search(r'\b(?:last time|previous (?:chat|session)|earlier session)\b', text, re.I) and re.search(
+        r'\b(?:ask(?:ed)?|looking for|search(?:ed)?|inquir(?:y|ies|ed)|show(?:ed)?|discuss(?:ed)?)\b', text, re.I
+    ):
+        return 'past_inquiry'
     if re.search(r'\bwhat (?:did|have) (?:i|we) (?:ask(?:ed)?|say|said|tell you|told you|talk(?:ed)? about|discuss(?:ed)?)\b', text, re.I):
         return 'question'
     if re.search(r'\b(?:what|which) (?:cars?|listings?|options?) did you (?:show|recommend|find)\b', text, re.I):
@@ -115,13 +123,55 @@ def parse_time(text):
     else: hour=int(match[4])
     return hour,match.group(0)
 
-def collect_booking(current, messages, profile, ids, inventory, user_id):
-    current_intent=bool(re.search(r'\b(book|schedule|viewing|test drive)\b',current,re.I))
+BOOKING_INTENT = re.compile(r'\b(?:book|schedule|viewing|test drive)\b', re.I)
+BOOKING_DECLINED = re.compile(
+    r"\b(?:do not|don['’]t|please don['’]t|never|no need to|not ready to|not yet|hold off on)\s+(?:book(?:ing)?|schedul(?:e|ing)|reserv(?:e|ing))\b",
+    re.I,
+)
+VIEWING_HOURS = 'Viewing slots are available Monday through Saturday from 08:00 to 20:00 Dubai time, on the hour, for confirmed Dubizzle-managed cars.'
+
+def mentioned_listings(text, inventory):
+    return [str(car_id) for car_id in inventory.frame.car_id
+            if re.search(r'\b' + re.escape(str(car_id)) + r'\b', text, re.I)]
+
+def collect_booking(current, messages, profile, ids, inventory, user_id, focused_car_id=None):
+    if BOOKING_DECLINED.search(current):
+        return None, 'I won’t make a booking.'
+    if re.search(r'\b(?:viewing|test.drive|booking)\b', current, re.I) and re.search(
+        r'\b(?:what|which|when)\b.*\b(?:slots?|hours?|times?|available|open)\b', current, re.I
+    ):
+        return None, VIEWING_HOURS
+    current_intent=bool(BOOKING_INTENT.search(current))
     last_reply=messages[-1].get('content','') if messages and messages[-1].get('role')=='assistant' else ''
     pending=last_reply.startswith('I can arrange the viewing.') or last_reply.startswith('I cannot book that slot:')
-    if not current_intent and not pending: return None,None
-    recent='\n'.join(str(item.get('content','')) for item in messages[-12:] if item.get('role')=='user')
-    combined=(recent+'\n'+current).strip()
+    if not current_intent:
+        supplies_details = (extract_name(current) or contact_from(current) or budget_amount(current)
+                            or parse_time(current)[0] is not None
+                            or re.search(r'\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})\b', current, re.I)
+                            or current.strip().upper() in {str(value).upper() for value in inventory.frame.car_id})
+        changes_topic = re.search(r'^\s*(?:show|find|search|compare|list|what|which|cancel|never mind)\b', current, re.I)
+        if not pending or not supplies_details or changes_topic:
+            return None,None
+    current_ids = mentioned_listings(current, inventory)
+    ordinal_refs = re.findall(r'\b(?:first|second|third|fourth)\b', current, re.I)
+    references = re.findall(r'\b(?:this|that|first|second|third|fourth)\s+(?:car|one|listing)\b', current, re.I)
+    if len(current_ids) > 1 or len(references) > 1 or (
+        len(set(map(str.lower, ordinal_refs))) > 1 and re.search(r'\b(?:and|both)\b', current, re.I)
+    ) or re.search(r'\b(?:both|all|two)\s+(?:cars|listings|viewings)\b', current, re.I):
+        return None, 'I can book one car at a time. Which listing would you like to book first?'
+    recent = []
+    if pending:
+        for item in reversed(messages[-12:]):
+            if item['role'] != 'user':
+                continue
+            recent.append(item['content'])
+            if BOOKING_INTENT.search(item['content']):
+                break
+    previous_ids = mentioned_listings('\n'.join(recent), inventory)
+    # A new listing or an explicit "instead" starts a separate booking request.
+    if (current_ids and previous_ids and current_ids[0] not in previous_ids) or re.search(r'\binstead\b', current, re.I):
+        recent = []
+    combined='\n'.join([*reversed(recent), current])
     day_matches=re.findall(r'\b\d{4}-\d{2}-\d{2}\b|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',combined,re.I)
     requested_day=day_matches[-1] if day_matches else None
     hour,time_text=parse_time(combined)
@@ -133,11 +183,13 @@ def collect_booking(current, messages, profile, ids, inventory, user_id):
     if invalid:
         return None,'I cannot book that slot: '+', and '.join(invalid)+'. Viewings are available Monday–Saturday, 08:00–20:00 Dubai time. Please choose a valid date and time.'
     mentions=[(m.start(),str(value)) for value in inventory.frame.car_id for m in re.finditer(r'\b'+re.escape(str(value))+r'\b',combined,re.I)]
-    car_id=max(mentions)[1] if mentions else None
+    car_id=current_ids[0] if current_ids else (max(mentions)[1] if mentions else None)
     ordinal_matches=re.findall(r'\b(first|second|third|fourth)\b',combined,re.I)
     if not car_id and ids and ordinal_matches:
         position=['first','second','third','fourth'].index(ordinal_matches[-1].lower())
         if position < len(ids): car_id=ids[position]
+    if not car_id and re.search(r'\b(?:this|that)\s+(?:car|one|listing)\b|\b(?:book|schedule)\s+it\b', combined, re.I):
+        car_id = focused_car_id or (ids[0] if len(ids) == 1 else None)
     name_matches=re.findall(r'\b(?:my name is|name is|I am)\s+([A-Za-z][A-Za-z .\'-]{0,60}?)(?=\s*[,.;]|\s+(?:and|contact|email|phone|budget)\b|$)',combined,re.I)
     name=name_matches[-1].strip() if name_matches else profile.get('name')
     contact=contact_from(combined)
@@ -186,6 +238,23 @@ def enforce_search_semantics(args, text):
             updates['limit']=value
     if re.search(r'\bmention(?:s|ed)?\b', text, re.I) and re.search(r'\b(?:explicitly|descriptions?)\b', text, re.I):
         updates['require_description_match'] = True
+    if re.search(r'\b(?:with|equipped with|must have)\b', text, re.I):
+        if args.query:
+            updates['require_description_match'] = True
+        else:
+            feature = re.search(r'\b(?:with|must have)\s+(?:a|an)\s+([^?!.;,]+)', text, re.I)
+            if feature and not re.search(r'\b(?:price|budget|warranty|mileage|transmission|odometer|aed|km|colour|color)\b', feature[1], re.I):
+                updates.update(query=feature[1].strip(), require_description_match=True)
+    price_bound = re.search(r'\b(?:under|below|less than)\s+AED\s*'+AMOUNT, text, re.I)
+    if price_bound:
+        unit = (price_bound[2] or '').lower()
+        amount = float(price_bound[1].replace(',', '')) * {'k':1000,'thousand':1000,'m':1000000,'million':1000000}.get(unit, 1)
+        updates.update(price_max=amount, price_max_exclusive=True)
+    elif re.search(r'\b(?:strictly under|strictly below|less than)\b', text, re.I) and args.price_max is not None and not args.max_mileage_km:
+        updates['price_max_exclusive'] = True
+    mileage_bound = re.search(r'\b(?:under|below|fewer than|less than)\s+([\d,]+(?:\.\d+)?)\s*(?:km|kilometres?|kilometers?)\b', text, re.I)
+    if mileage_bound:
+        updates.update(max_mileage_km=float(mileage_bound[1].replace(',', '')), max_mileage_exclusive=True)
     return args.model_copy(update=updates) if updates else args
 
 def comparison_request(text):
@@ -223,7 +292,7 @@ def comparison_differences(cars):
     return differences
 
 def comparison_fallback(cars, heading):
-    def label(car): return f'{car.get("year", "")} {str(car.get("make", "")).title()} {str(car.get("model", "")).upper()}'.strip()
+    def label(car): return f'{car.get("year", "")} {str(car.get("make", "")).title()} {str(car.get("model", "")).upper()} ({car["car_id"]})'.strip()
     def known(value): return value is not None and str(value).lower() not in {'nan','none',''}
     def score(car):
         return (3 if car.get('warranty') is True else 0)+(2 if known(car.get('mileage_km')) else 0)+(1 if known(car.get('price')) else 0)
@@ -234,6 +303,10 @@ def comparison_fallback(cars, heading):
         if known(car.get('mileage_km')): facts.append(f'{float(car["mileage_km"]):,.0f} km')
         facts.append('listed warranty' if car.get('warranty') is True else 'warranty not confirmed')
         lines.append(f'- **{label(car)}:** '+', '.join(facts)+'.')
+    differences = comparison_differences(cars)
+    if price_gap := differences.get('price'):
+        if price_gap['higher_listing_id']:
+            lines.append(f'{price_gap["higher_listing_id"]} costs AED {Decimal(price_gap["difference"]):,} more than {price_gap["lower_listing_id"]}.')
     if cars:
         choice=max(cars,key=score)
         lines.append(f'**Recommendation:** {label(choice)} is the best-supported option from the available structured data because it has the most complete combination of listed mileage, price and warranty information.')
@@ -247,7 +320,62 @@ def comparison_claims_grounded(content, cars):
     prices=[float(car['price']) for car in cars if known(car.get('price'))]
     mileages=[float(car['mileage_km']) for car in cars if known(car.get('mileage_km'))]
     years=[int(car['year']) for car in cars if known(car.get('year'))]
-    statements=[part for part in re.split(r'[\n.]',content) if part.strip()]
+    statements=[part for part in re.split(r'\n|\.(?=\s|$)',content) if part.strip()]
+    by_id = {car['car_id']: car for car in cars}
+    focused_id = None
+    for statement in statements:
+        locations = [(match.start(), car_id) for car_id in by_id
+                     if (match := re.search(r'\b'+re.escape(car_id)+r'\b', statement, re.I))]
+        mentioned = [car_id for _, car_id in sorted(locations)]
+        if len(mentioned) == 1:
+            focused_id = mentioned[0]
+        money = re.findall(r'\bAED\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*AED\b', statement, re.I)
+        distance = re.findall(r'\b([\d,]+(?:\.\d+)?)\s*kms?\b', statement, re.I)
+        candidates = mentioned or [
+            car['car_id'] for car in cars
+            if car.get('model') and re.search(r'\b'+re.escape(str(car['model']))+r'\b', statement, re.I)
+        ]
+        if not candidates and focused_id:
+            candidates = [focused_id]
+        plain = statement.replace('*', '')
+        negative_warranty = re.search(r'\b(?:no warranty|without (?:a )?warranty|warranty\s*:\s*no)\b', plain, re.I)
+        positive_warranty = re.search(r'\b(?:has|includes|offers|with)\s+(?:a\s+)?(?:(?:confirmed|listed|valid)\s+)?warranty\b|\bwarranty\s*:\s*(?:yes|true|confirmed)\b', plain, re.I)
+        unknown_warranty = re.search(r'\b(?:no (?:listed|confirmed) warranty|warranty(?: status)?\s*(?::|is)?\s*(?:unknown|unspecified|not listed|not confirmed))\b', plain, re.I)
+        if (negative_warranty or positive_warranty or unknown_warranty) and len(candidates) == 1:
+            expected = None if unknown_warranty else not bool(negative_warranty)
+            if by_id[candidates[0]].get('warranty') is not expected:
+                return False
+        if not money and not distance:
+            continue
+        relative = re.search(r'\b(?:higher|lower|more|less|fewer)\s+(?:by|than)\b|\b(?:by|difference|gap|save|saves|savings)\b', statement, re.I)
+        if relative and len(cars) == 2:
+            differences = comparison_differences(cars)
+            for field, claims in [('price', [a or b for a, b in money]), ('mileage_km', distance)]:
+                if claims and (field not in differences or any(
+                    Decimal(value.replace(',', '')) != Decimal(differences[field]['difference'])
+                    for value in claims
+                )):
+                    return False
+                if claims and len(mentioned) == 2 and bool(money) != bool(distance):
+                    # In direct "X costs more than Y" clauses, the first ID is the subject.
+                    # In "Compared to Y, X ..." the subject is the second ID.
+                    subject = mentioned[1] if re.match(r'\s*[*\- ]*compared (?:to|with)\b', statement, re.I) else mentioned[0]
+                    directions = set(re.findall(r'\b(higher|lower|more|less|fewer)\b', statement, re.I))
+                    higher = bool(directions & {'higher', 'more'})
+                    lower = bool(directions & {'lower', 'less', 'fewer'})
+                    if higher != lower:
+                        expected_id = differences[field]['higher_listing_id' if higher else 'lower_listing_id']
+                        if subject != expected_id:
+                            return False
+        elif len(candidates) == 1:
+            car = by_id[candidates[0]]
+            for field, claims in [('price', [a or b for a, b in money]), ('mileage_km', distance)]:
+                if claims and (not known(car.get(field)) or any(
+                    Decimal(value.replace(',', '')) != Decimal(str(car[field])) for value in claims
+                )):
+                    return False
+        elif money or distance:
+            return False
     for car in cars:
         aliases=[str(car.get('make') or ''),str(car.get('model') or ''),f'{car.get("make","")} {car.get("model","")}']
         relevant=[part for part in statements if any(alias and re.search(r'\b'+re.escape(alias)+r'\b',part,re.I) for alias in aliases)]
@@ -284,7 +412,7 @@ class Agent:
             from litellm import completion as narrator
         instructions={
             'inventory_search':'Write a short introduction to the supplied listings. Attribute any keyword matches to the listing descriptions. Structured listing cards will follow.',
-            'inventory_comparison':'Compare every supplied option using only its verified structured fields. Distinguish listings with the same make and model by their listing IDs. Explain meaningful tradeoffs and give one explicit recommendation. Use only supplied differences for numeric gaps. Verify relative claims against the supplied rows and avoid subjective or inferred adjectives. Structured listing cards will follow.',
+            'inventory_comparison':'Compare the supplied options using only verified fields. Use one bullet per listing with its ID, listed price, mileage and warranty status. If warranty is unknown, say unknown. Give one explicit recommendation and explain the tradeoff. Put each numeric difference in its own sentence naming both listing IDs, for example "the higher listing costs AED [price difference] more than the lower listing". Use only the supplied differences. Avoid subjective claims. Structured listing cards will follow.',
             'car_details':'Answer the user’s exact question directly in one or two sentences. Mention unavailable data plainly.',
             'preference_saved':'Confirm naturally what was saved in one sentence.',
             'returning_greeting':'Welcome the returning user and briefly recall the useful saved preferences.',
@@ -308,9 +436,12 @@ class Agent:
             response=narrator(**kwargs)
             content=(response.choices[0].message.content or '').strip()
             if not content or blocked(content): return rejected('empty or out-of-scope narration')
-            source=json.dumps(payload,default=str).replace(',','')
-            numbers=[value.replace(',','') for value in re.findall(r'\d[\d,]*(?:\.\d+)?',content)]
-            if any(value not in source for value in numbers): return rejected('number missing from verified context')
+            def numeric_values(text):
+                return {Decimal(value.replace(',', ''))
+                        for value in re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', text)}
+
+            if numeric_values(content) - numeric_values(json.dumps(payload,default=str)):
+                return rejected('number missing from verified context')
             known_ids=set(re.findall(r'\b[A-Z][A-Z0-9]*-\d+\b',json.dumps(verified,default=str)))
             if any(value not in known_ids for value in re.findall(r'\b[A-Z][A-Z0-9]*-\d+\b',content)): return rejected('unknown listing ID')
             if event=='inventory_comparison' and not comparison_claims_grounded(content,verified.get('items',[])):
@@ -321,8 +452,12 @@ class Agent:
             self.response_trace={'name':'compose_grounded_response','arguments':{'event':event},'result':{'grounded':False,'reason':type(exc).__name__},'source':'deterministic_fallback'}
             return fallback
 
-    def resolve(self,args,ids):
+    def resolve(self,args,ids,focused_car_id=None):
         if args.car_id: return self.inventory.get(args.car_id)
+        if args.position is None and focused_car_id:
+            car = self.inventory.get(focused_car_id)
+            if car and (not args.make or car['make'].lower() == args.make.lower()):
+                return car
         cars=[self.inventory.get(i) for i in ids]
         cars=[c for c in cars if c and (not args.make or c['make'].lower()==args.make.lower())]
         position=(args.position or 1)-1
@@ -353,6 +488,19 @@ class Agent:
         raw_model=str(car.get('model',''))
         model=raw_model.upper() if raw_model.lower() in {'cr-v','rav4','q8'} else raw_model.title()
         name=f'{car.get("year", "")} {make} {model}'.strip()
+        history = re.search(r'\b(service|maintenance|accident|ownership|vehicle|car)\s+history\b', question, re.I)
+        if history:
+            text = unescape(re.sub(r'<[^>]+>', ' ', f'{car.get("title") or ""} {car.get("description") or ""}'))
+            if history[1].lower() in ('service', 'maintenance'):
+                evidence = re.search(r'\b(?:full|complete|partial)\s+(?:dealer\s+)?(?:service|maintenance) history\b', text, re.I)
+            elif history[1].lower() == 'accident':
+                evidence = re.search(r'\b(?:accident[- ]free|no accidents|no accident history)\b', text, re.I)
+            elif history[1].lower() == 'ownership':
+                evidence = re.search(r'\b(?:single owner|one owner|first owner)\b', text, re.I)
+            else:
+                evidence = re.search(r'\b(?:full|complete|partial)\s+(?:dealer\s+)?service history\b', text, re.I)
+            return (f'The listing for the {name} says “{evidence[0]}”.' if evidence else
+                    f'The listing does not provide specific {history[0].lower()} details for the {name}.')
         if re.search(r'\bmileage\b',question,re.I):
             return f'The listed mileage for the {name} is {float(car["mileage_km"]):,.0f} km.' if known('mileage_km') else f'The mileage is not listed for the {name}.'
         if re.search(r'\bwarranty\b',question,re.I):
@@ -365,7 +513,7 @@ class Agent:
         return self.render(car)
 
     def filter_summary(self,args):
-        labels={'make':'make','model':'model','year_min':'year from','year_max':'year through','price_min':'minimum price','price_max':'maximum price','max_mileage_km':'maximum mileage','body_type':'body type','color':'color','warranty':'warranty','dubizzle_managed':'managed listing'}
+        labels={'make':'make','model':'model','year_min':'year from','year_max':'year through','price_min':'minimum price','price_max':'price strictly below AED' if args.price_max_exclusive else 'maximum price','max_mileage_km':'mileage strictly below km' if args.max_mileage_exclusive else 'maximum mileage','body_type':'body type','color':'color','transmission':'transmission','fuel_type':'fuel type','warranty':'warranty','dubizzle_managed':'managed listing'}
         return '; '.join(f'{label}: {getattr(args,key)}' for key,label in labels.items() if getattr(args,key,None) is not None)
 
     def recall(self, intent, state):
@@ -400,26 +548,26 @@ class Agent:
         if stated_name and stated_name != profile.get('name'):
             profile=self.memory.update(r.user_id,{'name':stated_name})
         ids=state['last_shown_cars']
+        focused_car_id=state['focused_car_id']
         traces=[]; cars=[]; parts=[]
         returning=not state['messages'] and any(v is not None for v in profile.values())
         def finish(reply):
             if self.response_trace: traces.append(self.response_trace)
-            self.memory.record(r.user_id,r.session_id,r.message,reply,ids)
+            self.memory.record(r.user_id,r.session_id,r.message,reply,ids,focused_car_id)
             return dict(reply=reply,referenced_cars=cars,active_preferences=self.memory.profile(r.user_id),tool_calls=traces)
         if re.search(r'\b(carswitch|yallamotor|cars24|autotrader|competitor)\b',r.message,re.I):
             return finish('I can only help with dubizzle cars, so I cannot compare or recommend competing platforms. I can help you search dubizzle inventory by make, budget, year or mileage.')
         if blocked(r.message): return finish('I can only help with dubizzle cars inventory, preferences and viewings.')
         if intent := recall_intent(r.message):
+            if intent == 'past_inquiry':
+                summary = profile.get('past_inquiries_summary')
+                return finish(f'Your most recent saved car inquiry was {summary}.' if summary else
+                              'I don’t have a saved inquiry from an earlier session yet.')
             return finish(self.recall(intent, state))
         greeting=preference_sentence(profile,returning=True) if returning else ''
         if explicit_preference(r.message) and negative_preference(r.message):
             return finish('I have not changed your preferences. Please tell me which colors, makes or body types you want included, so I can save them accurately.')
-        lead_text='\n'.join(item['content'] for item in state['messages'][-12:] if item['role']=='user')+'\n'+r.message
-        lead_contact=contact_from(lead_text)
-        lead_budget=budget_amount(lead_text) or profile.get('budget_max')
-        if lead_contact and lead_budget and profile.get('name'):
-            self.leads.qualify(r.user_id,profile['name'],lead_contact,lead_budget,lead_text[-2000:])
-        if re.fullmatch(r'(hi|hello|hey|thanks|thank you)[!. ]*',r.message,re.I):
+        if re.fullmatch(r'(hi|hello|hey|thanks|thank you|good (?:morning|afternoon|evening)|how are you)(?:[,! ]+how are you)?[?!. ]*',r.message,re.I):
             return finish(greeting or self.natural_reply(r.message,'clarification',{},'Hello! What make, budget in AED, or type of car are you looking for?'))
         preference_values=parse_preferences(r.message,self.inventory)
         if preference_values:
@@ -427,34 +575,39 @@ class Agent:
             traces.append({'name':'update_user_preferences','arguments':preference_values,'result':result,'source':'deterministic'})
             fallback=preference_sentence(preference_values)
             return finish(self.natural_reply(r.message,'preference_saved',preference_values,fallback))
-        booking,guidance=collect_booking(r.message,state['messages'],profile,ids,self.inventory,r.user_id)
-        if guidance: return finish(self.natural_reply(r.message,'clarification',{'guidance':guidance},guidance))
+        booking,guidance=collect_booking(r.message,state['messages'],profile,ids,self.inventory,r.user_id,focused_car_id)
+        if guidance: return finish(guidance)
         if booking:
+            self.leads.qualify(booking.user_id,booking.user_name,booking.contact,booking.budget_max,booking.notes)
             result=self.leads.book(booking)
             traces.append({'name':'book_viewing_and_qualify_lead','arguments':booking.model_dump(),'result':result,'source':'deterministic'})
             fallback=('Your viewing is booked.' if result['ok'] else 'I could not book the viewing. ')+result.get('reason','')
             if not result['ok']: fallback+=' I saved your contact, budget and stated needs as an inquiry.'
             reply=self.natural_reply(r.message,'booking',{'result':result,'request':booking.model_dump()},fallback.strip())
             return finish(reply)
+        lead_contact=contact_from(r.message)
+        lead_budget=budget_amount(r.message) or profile.get('budget_max')
+        if lead_contact and lead_budget and profile.get('name'):
+            self.leads.qualify(r.user_id,profile['name'],lead_contact,lead_budget,r.message[-2000:])
         ordinal=re.search(r'\b(first|second|third|fourth)\b',r.message,re.I)
         followup=re.search(r"\b(it|its|it's|that car|that first|first car|first Honda)\b",r.message,re.I)
         followup = followup or re.search(r'^(?:what|does|how much)\b.*\bagain[?.! ]*$', r.message, re.I)
-        requested_field=re.search(r'mileage|warranty|details|price|colou?r',r.message,re.I)
+        requested_field=re.search(r'mileage|warranty|details|price|colou?r|(?:service|maintenance|accident|ownership|vehicle|car)\s+history',r.message,re.I)
         explicit_car=next((str(car_id) for car_id in self.inventory.frame.car_id if re.search(r'\b'+re.escape(str(car_id))+r'\b',r.message,re.I)),None)
         if explicit_car and requested_field:
             car=self.inventory.get(explicit_car)
-            cars=[car]; ids=[explicit_car]+[value for value in ids if value!=explicit_car]
+            cars=[car]; focused_car_id=explicit_car
             args=CarDetails(car_id=explicit_car)
             traces=[{'name':'get_car_details','arguments':args.model_dump(),'result':car,'source':'direct'}]
             return finish(self.detail_fallback(r.message,car))
-        if not ids and (ordinal or followup) and requested_field:
+        if not (ids or focused_car_id) and (ordinal or followup) and requested_field:
             return finish('Which car do you mean? Search the inventory first or provide a listing ID.')
-        if ids and (ordinal or followup) and requested_field:
+        if (ids or focused_car_id) and (ordinal or followup) and requested_field:
             make=next((str(m) for m in self.inventory.frame.make.unique() if re.search(r'\b'+re.escape(str(m))+r'\b',r.message,re.I)),None)
-            args=CarDetails(position=['first','second','third','fourth'].index(ordinal[1].lower())+1 if ordinal else 1,make=make)
-            car=self.resolve(args,ids)
+            args=CarDetails(position=['first','second','third','fourth'].index(ordinal[1].lower())+1 if ordinal else None,make=make)
+            car=self.resolve(args,ids,focused_car_id)
             if not car: return finish('Which of the displayed cars do you mean?')
-            ids=[car['car_id']]+[i for i in ids if i!=car['car_id']]
+            focused_car_id=car['car_id']
             cars=[car]; traces=[{'name':'get_car_details','arguments':args.model_dump(),'result':car}]
             return finish(self.detail_fallback(r.message,car))
         completion=self.completion
@@ -464,7 +617,7 @@ class Agent:
                 raise RuntimeError('Set GEMINI_API_KEY or the selected provider key in .env; no model request was made.')
             from litellm import completion
         tools=[{'type':'function','function':{'name':name,'description':description,'parameters':schema.model_json_schema()}} for name,(schema,description) in TOOLS.items()]
-        prompt=SYSTEM+'\nToday: '+datetime.now(ZoneInfo('Asia/Dubai')).isoformat()+'\nUser ID: '+r.user_id+'\nSaved profile: '+json.dumps(profile)+'\nLast shown IDs: '+json.dumps(ids)
+        prompt=SYSTEM+'\nToday: '+datetime.now(ZoneInfo('Asia/Dubai')).isoformat()+'\nUser ID: '+r.user_id+'\nSaved profile: '+json.dumps(profile)+'\nLast shown IDs: '+json.dumps(ids)+'\nFocused listing ID: '+json.dumps(focused_car_id)
         model_name=os.getenv('LLM_MODEL','gemini/gemini-3.5-flash')
         request_args=dict(model=model_name,messages=[{'role':'system','content':prompt}]+state['messages'][-12:]+[{'role':'user','content':r.message}],tools=tools,tool_choice='auto',timeout=30)
         if not model_name.startswith('gemini/gemini-3'):
@@ -495,9 +648,13 @@ class Agent:
                     comparing=comparison_request(r.message)
                     search_args=args.model_copy(update={'limit':min(100,max(12,args.limit*4))}) if comparing else args
                     result=self.inventory.search(search_args)
+                    filters = self.filter_summary(args)
+                    self.memory.update(r.user_id, {'past_inquiries_summary':
+                        (f'an inventory search for {filters}' if filters else 'browsing the available inventory')[:1000]})
                     cars=distinct_options(result['items'],args.limit) if comparing else result['items']
                     result={**result,'items':cars}
                     ids=[c['car_id'] for c in cars]
+                    focused_car_id=ids[0] if len(ids)==1 else None
                     count=result['total']
                     if cars:
                         if args.sort_by and args.sort_by != 'relevance' and result.get('sortable_total') is not None:
@@ -521,10 +678,10 @@ class Agent:
                         fallback='### No confirmed matching cars\n\n'+(f'I could not confirm a listing with {summary}.' if summary else 'I could not confirm a matching listing.')+coverage+'\n\nTry removing one filter, increasing your budget, or asking for a different make or model.'
                         parts.append(self.natural_reply(r.message,'no_results',result,fallback))
                 elif name=='get_car_details':
-                    result=self.resolve(args,ids)
+                    result=self.resolve(args,ids,focused_car_id)
                     if result:
                         cars.append(result)
-                        ids=[result['car_id']]+[car_id for car_id in ids if car_id!=result['car_id']]
+                        focused_car_id=result['car_id']
                         parts.append(self.detail_fallback(r.message,result))
                     else: parts.append('Which car would you like details about?')
                 elif name=='update_user_preferences':

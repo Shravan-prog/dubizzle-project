@@ -39,6 +39,85 @@ def test_listing_reply_is_readable(inventory,tmp_path):
     assert 'Listing ID:' in result['reply']
 
 
+def test_booking_and_followup_context_regressions(inventory, tmp_path):
+    from src.agent import Agent
+    from src.leads import Leads
+    from src.memory import Memory
+
+    leads = Leads(tmp_path/'leads.csv', inventory)
+    agent = Agent(inventory, Memory(tmp_path/'memory.db'), leads,
+                  lambda **kwargs: tool_reply('search_inventory', {'make': 'Honda'}))
+
+    def chat(message, session='s'):
+        return agent.chat(ChatRequest(user_id='u', session_id=session, message=message))
+
+    chat('Show Honda cars.')
+    assert chat('What is the price of the second Honda?')['referenced_cars'][0]['car_id'] == 'H2'
+    assert chat('What is the mileage of the second Honda?')['referenced_cars'][0]['car_id'] == 'H2'
+    assert chat('What is its mileage?')['referenced_cars'][0]['car_id'] == 'H2'
+
+    details = ' on 2099-01-05 at 10 AM. My name is Demo User, contact demo@example.com, budget AED 80,000.'
+    assert 'one car at a time' in chat('Book H1 and H2' + details, 'multi')['reply']
+    assert leads.rows() == []
+    chat('Book H1 on 2099-01-05 at 10 AM.', 'pending')
+    assert len(chat('Show Honda cars.', 'pending')['referenced_cars']) == 2
+
+    single = Agent(inventory, Memory(tmp_path/'single.db'), leads,
+                   lambda **kwargs: tool_reply('search_inventory', {'model': 'CR-V'}))
+    single.chat(ChatRequest(user_id='u', session_id='s', message='Show the CR-V.'))
+    result = single.chat(ChatRequest(user_id='u', session_id='s', message='Book this car' + details))
+    assert 'booked' in result['reply'].lower()
+    assert leads.rows()[0]['car_id'] == 'H1'
+
+
+def test_swapped_listing_prices_fail_grounding(inventory):
+    from src.agent import comparison_claims_grounded
+    cars = [inventory.get('H1'), inventory.get('H2')]
+    assert not comparison_claims_grounded('H1 costs AED 40,000. H2 costs AED 60,000.', cars)
+    assert comparison_claims_grounded('H1 costs AED 60,000. H2 costs AED 40,000.', cars)
+    assert not comparison_claims_grounded('H2 costs AED 20,000 more than H1.', cars)
+    assert comparison_claims_grounded('H1 costs AED 20,000 more than H2.', cars)
+    assert comparison_claims_grounded('H1 is AED 20,000 higher than H2.', cars)
+    assert not comparison_claims_grounded('H2 is AED 20,000 higher than H1.', cars)
+    assert not comparison_claims_grounded('H2 has a confirmed warranty.', cars)
+    assert not comparison_claims_grounded('**H2**\n**Warranty:** Yes', cars)
+
+
+def test_audit_booking_intent_and_search_recall(inventory, tmp_path):
+    from src.agent import Agent
+    from src.leads import Leads
+    from src.memory import Memory
+
+    leads = Leads(tmp_path/'leads.csv', inventory)
+    agent = Agent(inventory, Memory(tmp_path/'memory.db'), leads,
+                  lambda **kwargs: tool_reply('search_inventory', {'make': 'Honda', 'price_max': 60000}))
+
+    def chat(message, session='s'):
+        return agent.chat(ChatRequest(user_id='u', session_id=session, message=message))
+
+    details = ' on 2099-01-05 at 10 AM. My name is Demo User, contact demo@example.com, budget AED 80,000.'
+    assert 'booked' not in chat('Do not book H1' + details)['reply'].lower()
+    assert not leads.rows()
+    assert '08:00' in chat('What viewing slots are available?')['reply']
+    chat('Book H2 on 2099-01-05 at 11 AM. My name is Demo User, budget AED 80,000.', 'switch')
+    switched = chat('Book H1 instead. Contact demo@example.com.', 'switch')['reply']
+    assert 'date' in switched and 'time' in switched
+    assert not leads.rows()
+    assert 'one car at a time' in chat('Book the first and second car' + details)['reply']
+    assert not leads.rows()
+    assert chat('Show Hondas strictly under AED 60,000.')['referenced_cars'][0]['car_id'] == 'H2'
+    assert 'Honda' in chat('What cars was I looking for last time?', 'fresh')['reply']
+    assert 'only help' not in chat('What is the service history of H1?')['reply']
+
+
+def test_mandatory_feature_is_not_only_a_ranking_hint(inventory):
+    from src.agent import enforce_search_semantics
+    from src.schemas import Search
+    request = enforce_search_semantics(Search(make='Honda', query='satellite dish'),
+                                       'Find a Honda with a roof-mounted satellite dish.')
+    assert inventory.search(request)['items'] == []
+
+
 def test_comparison_narration_accepts_verified_price_gap(inventory, tmp_path):
     from src.agent import Agent
     from src.memory import Memory
@@ -49,7 +128,7 @@ def test_comparison_narration_accepts_verified_price_gap(inventory, tmp_path):
         assert payload['verified_data']['differences']['price'] == {
             'difference': '20000', 'higher_listing_id': 'H1', 'lower_listing_id': 'H2',
         }
-        return NS(choices=[NS(message=NS(content='I recommend H1 for its listed warranty. It costs AED 20,000 more than H2.'))])
+        return NS(choices=[NS(message=NS(content='H1 costs AED 60,000.00. I recommend H1 for its listed warranty. It costs AED 20,000 more than H2.'))])
 
     agent = Agent(inventory, Memory(tmp_path/'memory.db'), Leads(tmp_path/'leads.csv', inventory),
                   lambda **kwargs: tool_reply('search_inventory', {'make': 'Honda'}), narrator)

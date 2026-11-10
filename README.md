@@ -31,6 +31,8 @@ Streamlit provides chat and inspectors without reading backend files: every oper
 
 The supplied workbook contains 100 rows with seven populated source columns. Conversion preserves these and adds stable IDs and nullable fields. Only facts stated in the listing text are extracted, including mileage, price, body type, color, transmission, fuel and warranty. Unknown prices fail price filters; unknown management status cannot authorize a viewing. Seller descriptions remain untrusted. Booking slots use Dubai time, Monday–Saturday inclusive, 08:00–20:00 inclusive; Sunday, past, out-of-hours and occupied slots are rejected. A process lock serializes chats; a file lock protects booking validation and CSV writes.
 
+The workbook's `raw dataset` and `cleaned dataset` tabs contain different samples. This project uses the 100 rows in `raw dataset` because it preserves the original listing descriptions and includes evidence for the ten Dubizzle-managed listings. It does not join the tabs by row number.
+
 This is a local demonstration, not a public deployment. Before production, add authentication/authorization (user IDs currently identify, not authenticate), separate private lead data from debugging output, distributed session locking, booking confirmation/idempotency, stronger semantic guardrails, broader adversarial/model evaluations and monitoring. The current single-pass tool planner uses generic clarification when no tool is selected; multi-step tool-result reasoning and better dialogue phrasing are future improvements. Keyword guards are not a complete security boundary. Do not expose the local API publicly.
 
 ## API
@@ -48,6 +50,7 @@ SQLite and leads are created in DATA_DIR (default data). Source data is not modi
 Qualified inquiries are saved when name, valid contact and budget are available, even without a successful booking. In leads.csv, empty slot fields mean an inquiry, not a reservation; successful booking fills the slot fields. Notes preserve the user's stated needs. Slots begin on exact hours: a request for 10:30 prompts clarification rather than silently changing it to 10:00. Budget shorthand such as AED 80k is supported; negative preference statements prompt clarification before changing memory.
 Name is included in the first submitted chat message. Changing User ID starts a separate local chat.
 Refresh or reopen the same Streamlit URL to resume its chat. Start New Session creates a separate conversation while retaining the profile for the same User ID.
+The profile also retains the most recent inventory inquiry as a summary of the applied search filters. Ask “What cars was I looking for last time?” in a new session to retrieve it.
 
 ## Verification
 
@@ -56,8 +59,8 @@ uv run pytest -q
 uv run python scripts/demo_logs.py
 ```
 
-Verified: 31 tests passed and two deterministic HTTP conversations completed after the parsing, lead-recording and grounded-response changes. Live API checks confirmed that mileage, warranty, price and colour questions return direct field answers without another model call or a repeated listing card. Comparison requests enforce the requested result count, collapse duplicate vehicle options, explain verified tradeoffs and end with a grounded recommendation. A semantic comparison guard rejects unsupported adjectives and relative price, mileage or year claims that contradict the structured rows. A field question without prior car context asks the user to search or provide a listing ID, and provider outages display a friendly UI error rather than backend JSON. Gemini inventory and booking replies expose `compose_grounded_response` as a model-backed stage in the tool trace. Regression coverage also includes natural responses grounded in tool results, budget shorthand, negative preferences, contact validation, hourly slots and inquiries for unmanaged cars. Common inventory searches use a deterministic fallback if transient provider failures remain after retries.
-The deterministic demo replaces only the LLM boundary and uses synthetic inventory in a temporary directory; it does not alter supplied inventory or personal leads. Full transcripts: [logs/demo_transcripts.md](logs/demo_transcripts.md). The supplied listings contain no explicit dubizzle-managed flag, so live bookings are correctly rejected; successful booking persistence is demonstrated with a clearly labelled synthetic managed-car fixture.
+The latest audit fixes passed 44 automated tests, 17 scripted evaluation cases, and two deterministic HTTP demos. Targeted live checks covered strict price bounds, required features, service history, and viewing hours. The BMW comparison used the grounded fallback after Gemini supplied an incorrect rounded price difference. The tool trace records whether Gemini wrote the reply or a fallback was used.
+The deterministic demo replaces only the LLM boundary and uses synthetic inventory in a temporary directory. Full transcripts are in [logs/demo_transcripts.md](logs/demo_transcripts.md). The raw workbook has no dedicated management column. Ten listings identify themselves as offered by Dubizzle Cars and explicitly say its team manages the buyer–seller interaction. The importer marks those ten eligible for prototype bookings and leaves unverified listings unknown.
 
 ## Live Gemini RAG evaluation
 

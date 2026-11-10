@@ -8,6 +8,9 @@ class Memory:
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT PRIMARY KEY, profile TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, messages TEXT NOT NULL, last_shown_cars TEXT NOT NULL)')
+            db.execute('BEGIN IMMEDIATE')
+            if 'focused_car_id' not in {column[1] for column in db.execute('PRAGMA table_info(sessions)')}:
+                db.execute('ALTER TABLE sessions ADD COLUMN focused_car_id TEXT')
 
     def connect(self): return sqlite3.connect(self.path,timeout=10)
 
@@ -29,22 +32,22 @@ class Memory:
 
     def session(self,user,session):
         with self.connect() as db:
-            db.execute('INSERT OR IGNORE INTO sessions VALUES (?,?,?,?)',(session,user,'[]','[]'))
+            db.execute('INSERT OR IGNORE INTO sessions (session_id,user_id,messages,last_shown_cars) VALUES (?,?,?,?)',(session,user,'[]','[]'))
         return self.read_session(user,session)
 
     def read_session(self,user,session):
         with self.connect() as db:
-            row=db.execute('SELECT user_id,messages,last_shown_cars FROM sessions WHERE session_id=?',(session,)).fetchone()
+            row=db.execute('SELECT user_id,messages,last_shown_cars,focused_car_id FROM sessions WHERE session_id=?',(session,)).fetchone()
         if row is None:
-            return {'messages': [], 'last_shown_cars': []}
+            return {'messages': [], 'last_shown_cars': [], 'focused_car_id': None}
         if row[0]!=user: raise PermissionError('Session belongs to another user')
-        return {'messages':json.loads(row[1]),'last_shown_cars':json.loads(row[2])}
+        return {'messages':json.loads(row[1]),'last_shown_cars':json.loads(row[2]),'focused_car_id':row[3]}
 
     def reset(self,user,session):
         self.session(user,session)
-        with self.connect() as db: db.execute("UPDATE sessions SET messages='[]',last_shown_cars='[]' WHERE session_id=?",(session,))
+        with self.connect() as db: db.execute("UPDATE sessions SET messages='[]',last_shown_cars='[]',focused_car_id=NULL WHERE session_id=?",(session,))
 
-    def record(self,user,session,message,reply,ids):
+    def record(self,user,session,message,reply,ids,focused_car_id=None):
         state=self.session(user,session)
         messages=state['messages']+[{'role':'user','content':message},{'role':'assistant','content':reply}]
-        with self.connect() as db: db.execute('UPDATE sessions SET messages=?,last_shown_cars=? WHERE session_id=?',(json.dumps(messages),json.dumps(ids),session))
+        with self.connect() as db: db.execute('UPDATE sessions SET messages=?,last_shown_cars=?,focused_car_id=? WHERE session_id=?',(json.dumps(messages),json.dumps(ids),focused_car_id,session))

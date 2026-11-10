@@ -32,9 +32,13 @@ class Search(Contract):
     year_max: int | None = Field(None, ge=1900, le=2100)
     price_min: float | None = Field(None, ge=0)
     price_max: float | None = Field(None, ge=0)
+    price_max_exclusive: bool = False
     max_mileage_km: float | None = Field(None, ge=0)
+    max_mileage_exclusive: bool = False
     body_type: str | None = None
     color: str | None = None
+    transmission: str | None = None
+    fuel_type: str | None = None
     warranty: bool | None = None
     dubizzle_managed: bool | None = None
     sort_by: Literal['relevance', 'price', 'mileage_km', 'year'] | None = None
