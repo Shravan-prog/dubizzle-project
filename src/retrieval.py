@@ -40,21 +40,24 @@ class Inventory:
             phrase = self.normalized_description(filters.query)
             descriptions = df['description'].fillna('').map(self.normalized_description)
             df = df[(' ' + descriptions + ' ').str.contains(f' {phrase} ', regex=False)] if phrase else df.iloc[:0]
+        if phrase := self.normalized_description(filters.exclude_description_query):
+            descriptions = df['description'].fillna('').map(self.normalized_description)
+            df = df[~(' ' + descriptions + ' ').str.contains(f' {phrase} ', regex=False)]
         query_tokens = self.normalized_description(filters.query).split()
         if query_tokens and not filters.require_description_match:
             terms = set(query_tokens)
             df = df.loc[[index for index in df.index if terms.intersection(self.tokens[index])]]
         if filters.sort_by in requested:
             requested[filters.sort_by] = True
-        unknown_counts={key:int(df[key].isna().sum()) for key,active in requested.items() if active}
+        constraints = {}
         for key in ['body_type', 'color', 'transmission', 'fuel_type']:
             value = getattr(filters, key)
             if value is not None:
-                df = df[df[key].astype(str).str.casefold() == value.casefold()]
+                constraints[key] = df[key].astype(str).str.casefold() == value.casefold()
         for key in ['warranty', 'dubizzle_managed']:
             value = getattr(filters, key)
             if value is not None:
-                df = df[df[key].astype(str).str.lower() == str(value).lower()]
+                constraints[key] = df[key].astype(str).str.lower() == str(value).lower()
         for arg, col, lower in [('price_min','price',True),('price_max','price',False),('max_mileage_km','mileage_km',False)]:
             value = getattr(filters,arg)
             if value is not None:
@@ -62,7 +65,18 @@ class Inventory:
                 exclusive = ((arg == 'price_max' and filters.price_max_exclusive)
                              or (arg == 'max_mileage_km' and filters.max_mileage_exclusive))
                 mask = values >= value if lower else (values < value if exclusive else values <= value)
-                df = df[mask]
+                constraints[col] = constraints[col] & mask if col in constraints else mask
+        unknown_counts = {}
+        for key, active in requested.items():
+            if not active:
+                continue
+            missing = df[key].isna()
+            for other, mask in constraints.items():
+                if other != key:
+                    missing = missing & mask
+            unknown_counts[key] = int(missing.sum())
+        for mask in constraints.values():
+            df = df.loc[mask.reindex(df.index)]
         if filters.sort_by and filters.sort_by != 'relevance':
             values = pd.to_numeric(df[filters.sort_by], errors='coerce')
             sortable_total=int(values.notna().sum())

@@ -65,13 +65,16 @@ def extract_fields(title, description):
                            r'|\b\d+[- ]speed\s+(automatic|manual|cvt)\b'
                            r'|\b(automatic|manual)\s+export only\b',text,re.I)
     if transmission: result['transmission']=next(group for group in transmission.groups() if group).lower()
+    elif re.search(r'(?:^|[\n•])\s*(?:[•*-]\s*)?fully automatic(?: for (?:effortless|easy) driving)?\s*(?=\n|$)', text, re.I):
+        result['transmission'] = 'automatic'
     fuel=re.search(r'\b(?:fuel(?: type)?|powertrain)\s*:?\s*'+FUELS+r'\b'
-                   r'|\b\d+(?:\.\d+)?\s*l\s+(?:\d+[- ]?(?:cyl(?:inder)?|cyls)\s+)?'+FUELS+r'\b',text,re.I)
+                   r'|\b\d+(?:\.\d+)?\s*l\s+(?:(?:[vi]\d+|\d+[- ]?(?:cyl(?:inder)?|cyls))\s+)?'+FUELS+r'\b'
+                   r'|\b[\d,]+\s*kms?\s+driven\s*,\s*'+FUELS+r'\s*(?=,|$)',text,re.I)
     if fuel: result['fuel_type']=next(group for group in fuel.groups() if group).lower().replace('gasoline','petrol')
     elif re.search(r'\b(?:all[- ]electric|fully electric|electric motor|electric (?:sedan|suv|hatchback|vehicle))\b',text,re.I):
         result['fuel_type'] = 'electric'
     if re.search(r'\b(no|without)\s+(?:remaining\s+)?warranty\b',text,re.I): result['warranty']=False
-    elif re.search(r'\b(?:under warranty|warranty (?:included|valid|until|covers)|comes with (?:a )?warranty)\b',text,re.I): result['warranty']=True
+    elif re.search(r'\b(?:under warranty|warranty (?:included|valid|until|till|covers)|comes with (?:a )?warranty)\b',text,re.I): result['warranty']=True
     elif re.search(r'\b\d+[- ]years?\s+(?:(?:agency|factory|dealer)\s+)?warranty\b',str(title),re.I): result['warranty']=True
     elif re.search(r'\b(?:agency|factory|manufacturer) warranty\b',str(title),re.I): result['warranty']=True
     if re.search(r'\b(?:not|no longer|never)\s+(?:managed by dubizzle|dubizzle[ -]managed)\b', text, re.I):
@@ -86,13 +89,13 @@ def extract_fields(title, description):
         result['dubizzle_managed'] = True
     return result
 
-def prepare(force=False):
+def prepare(force=False, source=None):
     root = Path(__file__).resolve().parents[1]
     target = root / 'data/cars.csv'
     if target.exists() and not force:
         print('Existing cars.csv preserved')
         return
-    df = pd.read_excel(root / 'Copy_of_sample_cars_dataset.xlsx', sheet_name='raw dataset',
+    df = pd.read_excel(source if source is not None else root / 'Copy_of_sample_cars_dataset.xlsx', sheet_name='raw dataset',
                        usecols=SOURCE_COLUMNS)
     df.insert(0, 'car_id', [f'CAR-{i:03}' for i in range(1,len(df)+1)])
     fields=['price','mileage_km','body_type','color','transmission','fuel_type','warranty','dubizzle_managed']

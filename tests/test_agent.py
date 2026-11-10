@@ -415,3 +415,87 @@ def test_comparison_guard_rejects_contradictory_or_unsupported_claims(tmp_path):
     assert 'low pricing data' not in result['reply'].lower()
     assert '**Recommendation:**' in result['reply']
     assert result['tool_calls'][-1]['source']=='deterministic_guardrail'
+
+
+def test_booking_decline_and_target_switch_do_not_write_leads(inventory, tmp_path):
+    from src.agent import Agent
+    from src.leads import Leads
+    from src.memory import Memory
+
+    memory = Memory(tmp_path/'memory.db')
+    leads = Leads(tmp_path/'leads.csv', inventory)
+    agent = Agent(inventory, memory, leads, lambda **kw: tool_reply('search_inventory', {}))
+    def chat(message):
+        return agent.chat(ChatRequest(user_id='u', session_id='s', message=message))['reply']
+
+    details = ' on 2099-01-05 at 10 AM. My name is Demo User, budget AED 80,000.'
+    assert 'won’t make a booking' in chat("I don't want to book H1" + details + ' Contact demo@example.com.')
+    assert 'please ask me' in chat('Book H1' + details + ' Contact demo@example.com if my family agrees.')
+    assert leads.rows() == []
+    memory.record('u', 's', 'Show cars', 'Here they are', ['H2', 'H1'])
+    assert 'contact' in chat('Book the first car' + details)
+    assert 'date' in chat('Book the second car. Contact demo@example.com.')
+    assert leads.rows() == []
+
+
+def test_booking_records_both_budget_bounds(inventory, tmp_path):
+    from src.agent import Agent
+    from src.leads import Leads
+    from src.memory import Memory
+
+    leads = Leads(tmp_path/'leads.csv', inventory)
+    agent = Agent(inventory, Memory(tmp_path/'memory.db'), leads,
+                  lambda **kw: tool_reply('search_inventory', {}))
+    result = agent.chat(ChatRequest(user_id='u', session_id='s', message=(
+        'Book H1 on 2099-01-05 at 10 AM. My name is Demo User, contact demo@example.com, '
+        'budget AED 60,000 to AED 80,000. I need room for five.')))
+    assert 'booked' in result['reply']
+    row, = leads.rows()
+    assert (float(row['budget_min']), float(row['budget_max'])) == (60000, 80000)
+
+
+def test_search_respects_exclusive_suffix_aed_and_description_exclusion(inventory):
+    from src.agent import enforce_search_semantics
+    from src.schemas import Search
+
+    budget = enforce_search_semantics(Search(make='Honda', price_max=60000),
+                                      'Show me Honda cars under 60,000 AED.')
+    assert [car['car_id'] for car in inventory.search(budget)['items']] == ['H2']
+    excluded = enforce_search_semantics(Search(make='Honda', query='panoramic roof',
+                                               require_description_match=True),
+                                        'Find Hondas without a panoramic roof. Exclude any listing that mentions one.')
+    assert [car['car_id'] for car in inventory.search(excluded)['items']] == ['H2']
+
+
+def test_warranty_grounding_binds_each_claim_and_applies_to_search(inventory, tmp_path):
+    from src.agent import Agent, comparison_claims_grounded
+    from src.leads import Leads
+    from src.memory import Memory
+
+    cars = [inventory.get('H1'), inventory.get('H2')]
+    claims = 'H2 has a confirmed warranty, while H1 has no warranty.'
+    assert not comparison_claims_grounded(claims, cars)
+    assert comparison_claims_grounded('H1 has a listed warranty and H2 has no warranty.', cars)
+    agent = Agent(inventory, Memory(tmp_path/'memory.db'), Leads(tmp_path/'leads.csv', inventory),
+                  lambda **kw: tool_reply('search_inventory', {'model': 'RAV4'}),
+                  lambda **kw: NS(choices=[NS(message=NS(content='The RAV4 comes with a confirmed warranty.'))]))
+    result = agent.chat(ChatRequest(user_id='u', session_id='s', message='Show me a Toyota RAV4'))
+    assert result['reply'].startswith('Found 1 matching listing.')
+
+
+def test_previous_session_recall_excludes_current_search(inventory, tmp_path):
+    from src.agent import Agent
+    from src.leads import Leads
+    from src.memory import Memory
+
+    def planner(**kw):
+        return tool_reply('search_inventory', {'make': kw['messages'][-1]['content'].split()[-1]})
+
+    agent = Agent(inventory, Memory(tmp_path/'memory.db'), Leads(tmp_path/'leads.csv', inventory), planner)
+    def chat(session, message):
+        return agent.chat(ChatRequest(user_id='u', session_id=session, message=message))['reply']
+
+    chat('old', 'Show Honda')
+    chat('current', 'Show Toyota')
+    reply = chat('current', 'What cars was I looking for in my previous session?')
+    assert 'Honda' in reply and 'Toyota' not in reply

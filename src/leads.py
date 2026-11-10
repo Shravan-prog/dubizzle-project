@@ -18,13 +18,13 @@ class Leads:
             fcntl.flock(f,fcntl.LOCK_SH)
             return list(csv.DictReader(f))
 
-    def qualify(self,user_id,name,contact,budget,notes):
+    def qualify(self,user_id,name,contact,budget,notes,budget_min=None):
         """Record an inquiry independently of booking eligibility or slot selection.
 
         Empty slot fields identify a qualified inquiry, never a reserved slot.
         """
         if not valid_contact(contact) or budget <= 0: return
-        row=dict(user_id=user_id,user_name=name,contact=contact,car_id='',requested_day='',requested_hour_24='',budget_max=budget,notes=notes)
+        row=dict(user_id=user_id,user_name=name,contact=contact,car_id='',requested_day='',requested_hour_24='',budget_max=budget,notes=notes,budget_min=budget_min)
         with self.path.open('r+',newline='') as f:
             fcntl.flock(f,fcntl.LOCK_EX)
             rows=list(csv.DictReader(f))

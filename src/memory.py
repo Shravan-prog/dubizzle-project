@@ -8,6 +8,7 @@ class Memory:
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT PRIMARY KEY, profile TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, messages TEXT NOT NULL, last_shown_cars TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS session_inquiries (sequence INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT UNIQUE NOT NULL, user_id TEXT NOT NULL, summary TEXT NOT NULL)')
             db.execute('BEGIN IMMEDIATE')
             if 'focused_car_id' not in {column[1] for column in db.execute('PRAGMA table_info(sessions)')}:
                 db.execute('ALTER TABLE sessions ADD COLUMN focused_car_id TEXT')
@@ -47,7 +48,17 @@ class Memory:
         self.session(user,session)
         with self.connect() as db: db.execute("UPDATE sessions SET messages='[]',last_shown_cars='[]',focused_car_id=NULL WHERE session_id=?",(session,))
 
-    def record(self,user,session,message,reply,ids,focused_car_id=None):
+    def previous_inquiry(self,user,session):
+        with self.connect() as db:
+            row = db.execute('SELECT summary FROM session_inquiries WHERE user_id=? AND session_id!=? ORDER BY sequence DESC LIMIT 1',
+                             (user,session)).fetchone()
+        return row[0] if row else None
+
+    def record(self,user,session,message,reply,ids,focused_car_id=None,inquiry_summary=None):
         state=self.session(user,session)
         messages=state['messages']+[{'role':'user','content':message},{'role':'assistant','content':reply}]
-        with self.connect() as db: db.execute('UPDATE sessions SET messages=?,last_shown_cars=?,focused_car_id=? WHERE session_id=?',(json.dumps(messages),json.dumps(ids),focused_car_id,session))
+        with self.connect() as db:
+            db.execute('UPDATE sessions SET messages=?,last_shown_cars=?,focused_car_id=? WHERE session_id=?',(json.dumps(messages),json.dumps(ids),focused_car_id,session))
+            if inquiry_summary:
+                db.execute('INSERT OR REPLACE INTO session_inquiries (session_id,user_id,summary) VALUES (?,?,?)',
+                           (session,user,inquiry_summary))

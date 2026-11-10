@@ -1,3 +1,5 @@
+import pytest
+
 from scripts.prepare_data import extract_fields
 
 def test_extracts_only_explicit_structured_facts():
@@ -46,3 +48,20 @@ def test_audit_wording_variants():
     assert extract_fields('GLA 35 AMG | AGENCY WARRANTY/SERVICE!', '')['warranty'] is True
     assert extract_fields('', 'This car is no longer managed by Dubizzle.')['dubizzle_managed'] is False
     assert extract_fields('', 'Asking price AED 9,000.')['price'] == 9000
+
+
+@pytest.mark.parametrize(('description', 'field', 'expected'), [
+    ('2.7L V4 Petrol | Automatic', 'fuel_type', 'petrol'),
+    ('160000KM Driven, Diesel ,Caravan, Manual Transmission', 'fuel_type', 'diesel'),
+    ('Interior And Exterior Is Clean<br>•Fully Automatic<br>•Audio Control On The Steering Wheel',
+     'transmission', 'automatic'),
+    ('Supplied with 02 Original Keys<br>Fully Automatic for Effortless Driving<br>Stylish Ride',
+     'transmission', 'automatic'),
+    ('Ford Warranty Till February 2029 or 100,000 km', 'warranty', True),
+])
+def test_extracts_explicit_listing_variants(description, field, expected):
+    assert extract_fields('', description)[field] == expected
+
+
+def test_automatic_equipment_does_not_describe_transmission():
+    assert extract_fields('', 'Fully Automatic Climate Control')['transmission'] is None

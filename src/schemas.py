@@ -26,6 +26,7 @@ class ResetRequest(Contract):
 class Search(Contract):
     query: str = ''
     require_description_match: bool = False
+    exclude_description_query: str = Field('', description='Exclude listings whose description contains this exact phrase. Absence of a mention does not prove absence of a feature.')
     make: str | None = None
     model: str | None = None
     year_min: int | None = Field(None, ge=1900, le=2100)
@@ -78,11 +79,14 @@ class Booking(Contract):
     requested_hour_24: int = Field(ge=0, le=23)
     budget_max: float = Field(gt=0)
     notes: str = Field('', max_length=2000)
+    budget_min: float | None = Field(None, ge=0)
 
     @model_validator(mode='after')
     def check_contact(self):
         if not valid_contact(self.contact):
             raise ValueError('Provide a valid email address or phone number, not a date')
+        if self.budget_min is not None and self.budget_min > self.budget_max:
+            raise ValueError('Minimum budget must not exceed maximum budget')
         return self
 
 def valid_contact(value):

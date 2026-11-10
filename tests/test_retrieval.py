@@ -43,3 +43,13 @@ def test_price_coverage_is_scoped_and_unpriced_listings_do_not_rank(inventory):
     assert inventory.search(Search(make='Honda', price_max=5000))['unknown_counts'] == {'price': 0}
     ranked = inventory.search(Search(make='Toyota', sort_by='price', limit=1))
     assert ranked['items'] == [] and ranked['sortable_total'] == 0
+
+
+def test_missing_prices_exclude_listings_with_a_different_body_type(inventory):
+    from src.schemas import Search
+
+    inventory.frame.loc[inventory.frame.car_id == 'H2', 'price'] = None
+    result = inventory.search(Search(body_type='SUV', price_max=100_000))
+
+    assert [car['car_id'] for car in result['items']] == ['H1']
+    assert result['unknown_counts']['price'] == 1
